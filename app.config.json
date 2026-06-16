@@ -1,11 +1,11 @@
 {
-  "environmentUrl": "https://bwm98081.apps.dynatrace.com",
+  "environmentUrl": "https://yhu28601.apps.dynatrace.com/",
   "app": {
-    "id": "my.pulse.assessment",
-    "name": "Pulse Assessment",
-    "description": "Assess observability coverage and maturity across 9 Dynatrace capabilities.",
+    "id": "my.esa.tenant.evaluator",
+    "name": "ESA Tenant Evaluator",
+    "description": "Assess Dynatrace maturity, tenant configuration, and Gen3 adoption.",
     "icon": "ui/assets/icon.svg",
-    "version": "2.4.2",
+    "version": "2.5.0",
     "scopes": [
       { "name": "storage:logs:read", "comment": "Log Analytics coverage" },
       { "name": "storage:events:read", "comment": "Security, Delivery, Problems" },
@@ -15,9 +15,30 @@
       { "name": "storage:bizevents:read", "comment": "Business Observability" },
       { "name": "storage:buckets:read", "comment": "Grail bucket access for DQL metrics queries" },
       { "name": "storage:system:read", "comment": "System table access" },
+      { "name": "storage:files:read", "comment": "Query lookup tables from dt.system.files" },
+      { "name": "settings:objects:read", "comment": "Read Settings 2.0 objects" },
+      { "name": "settings:schemas:read", "comment": "List Settings 2.0 schemas" },
+      { "name": "environment-api:extensions:read", "comment": "List Extensions 2.0" },
+      { "name": "environment-api:api-tokens:read", "comment": "List API tokens" },
+      { "name": "environment-api:synthetic-monitors:read", "comment": "List synthetic monitors including NAM" },
+      { "name": "environment-api:synthetic:read", "comment": "List synthetic locations" },
+      { "name": "environment-api:activegates:read", "comment": "List ActiveGates" },
+      { "name": "environment-api:network-zones:read", "comment": "List network zone definitions" },
+      { "name": "environment-api:slo:read", "comment": "List SLO definitions" },
+      { "name": "environment-api:problems:read", "comment": "Query problem history" },
+      { "name": "environment-api:credentials:read", "comment": "List credential vault entries" },
+      { "name": "environment-api:attacks:read", "comment": "Query runtime application attacks" },
+      { "name": "environment-api:releases:read", "comment": "Query release tracking data" },
+      { "name": "automation:workflows:read", "comment": "List AutomationEngine workflows" },
+      { "name": "automation:calendars:read", "comment": "Read business calendars" },
+      { "name": "app-settings:objects:read", "comment": "Read ESA evaluator configuration" },
+      { "name": "app-settings:objects:write", "comment": "Save ESA evaluator configuration" },
       { "name": "document:documents:read", "comment": "Load assessment history" },
       { "name": "document:documents:write", "comment": "Save assessment snapshots" },
-      { "name": "document:documents:delete", "comment": "Cleanup old snapshots" }
+      { "name": "document:documents:delete", "comment": "Cleanup old snapshots" },
+      { "name": "document:environment-shares:read", "comment": "Read document sharing status" },
+      { "name": "document:direct-shares:read", "comment": "List direct document shares" },
+      { "name": "document:trash.documents:read", "comment": "List trashed documents" }
     ]
   }
 }

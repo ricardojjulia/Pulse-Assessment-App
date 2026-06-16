@@ -5,7 +5,6 @@ import Colors from "@dynatrace/strato-design-tokens/colors";
 import { Button } from "@dynatrace/strato-components/buttons";
 import { ExternalLink, Text, Strong, Code } from "@dynatrace/strato-components/typography";
 import { Flex, Grid, Surface, Container } from "@dynatrace/strato-components/layouts";
-import { ToggleButtonGroup, ToggleButtonGroupItem } from "@dynatrace/strato-components-preview/buttons";
 import { Menu } from "@dynatrace/strato-components-preview/navigation";
 import { ProgressBar } from "@dynatrace/strato-components/content";
 import type { CoverageData, ViewMode, CapabilityResult } from "../hooks/useCoverageData";
@@ -29,6 +28,7 @@ import { CovMatRadar, renderRadarToDataURL, type CovMatRadarHandle } from "../co
 import { CapabilityScatter, renderScatterToDataURL } from "../components/CapabilityScatter";
 import { ConsolidationPanel } from "../components/ConsolidationPanel";
 import type { ConsolidationPanelHandle } from "../components/ConsolidationPanel";
+import { SegmentedControl } from "../components/SegmentedControl";
 
 const SCALE = SCORE_BANDS.map(b => ({
   l: b.label,
@@ -336,11 +336,15 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
             <Button onClick={refresh} size="condensed">↻ Refresh</Button>
             {/* View Mode Toggle */}
             <Flex flexDirection="column" onClick={(e) => e.stopPropagation()} style={{ marginLeft: 4 }}>
-              <ToggleButtonGroup value={viewMode} onChange={(val: string) => setViewMode(val as ViewMode)}>
-                <ToggleButtonGroupItem value="coverage">Coverage</ToggleButtonGroupItem>
-                <ToggleButtonGroupItem value="maturity">Maturity</ToggleButtonGroupItem>
-                <ToggleButtonGroupItem value="recommendations">Executive Summary</ToggleButtonGroupItem>
-              </ToggleButtonGroup>
+              <SegmentedControl
+                value={viewMode}
+                onChange={setViewMode}
+                options={[
+                  { value: "coverage", label: "Coverage" },
+                  { value: "maturity", label: "Maturity" },
+                  { value: "recommendations", label: "Executive Summary" },
+                ]}
+              />
             </Flex>
             <Button onClick={() => navigate("/compare")} variant="emphasized" color="primary">
               Evolution Over Time
@@ -354,6 +358,9 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData }) =
                   }}>{Math.min(history.snapshots.length, 12)}</Text>
                 </Button.Suffix>
               )}
+            </Button>
+            <Button onClick={() => navigate("/tenant-review")} size="condensed">
+              Tenant Review
             </Button>
             <Menu>
               <Menu.Trigger>
@@ -1385,8 +1392,10 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
   onConsolidationChange: (factors: Record<string, number>) => void;
   excludedCaps: Set<string>;
 }) {
+  const navigate = useNavigate();
   const preflight = usePreflight();
   const consolidationRef = React.useRef<ConsolidationPanelHandle>(null);
+  const [showHowItWorks, setShowHowItWorks] = useState(false);
 
   const handleRunClick = useCallback(async () => {
     consolidationRef.current?.collapse();
@@ -1417,7 +1426,7 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
         <Flex alignItems="center" justifyContent="center" gap={8}>
           <img src={APP_ICON} alt="" width={36} height={36} style={{ borderRadius: 8 }} />
           <Flex flexDirection="column" style={{ fontSize: 20, fontWeight: 800, color: text, letterSpacing: -0.5, lineHeight: 1.2 }}>
-            Pulse Assessment
+            ESA Tenant Evaluator
           </Flex>
         </Flex>
       </Flex>
@@ -1498,6 +1507,9 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
         >
           {preflight.running ? "Validating…" : selectedCount === 0 ? "Select at least 1 capability" : selectedCount < totalCount ? `Run Assessment (${selectedCount}/${totalCount})` : "Run Assessment"}
         </Button>
+        <Button onClick={() => navigate("/tenant-review")} size="condensed" style={{ marginTop: 8 }}>
+          Tenant Review
+        </Button>
         {hasResults && (
           <Flex flexDirection="column" alignItems="center" gap={6} style={{ marginTop: 12 }}>
             <Button onClick={resume} color="primary">
@@ -1537,7 +1549,34 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
       </Flex>
 
       <Flex flexDirection="column" style={{ fontSize: 12, color: textSec, lineHeight: 1.7, maxWidth: 320, textAlign: "left" }}>
-        <Flex flexDirection="column" style={{ fontWeight: 700, color: accent, fontSize: 12, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>How it works</Flex>
+        <button
+          type="button"
+          onClick={() => setShowHowItWorks((value) => !value)}
+          aria-expanded={showHowItWorks}
+          style={{
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
+            padding: "8px 10px",
+            borderRadius: 8,
+            border: `1px solid ${borderPri}`,
+            background: bgPrimary,
+            color: accent,
+            cursor: "pointer",
+            font: "inherit",
+            fontSize: 12,
+            fontWeight: 800,
+            letterSpacing: 1,
+            textTransform: "uppercase",
+          }}
+        >
+          How it works
+          <span style={{ fontSize: 10, transform: showHowItWorks ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.16s" }}>▼</span>
+        </button>
+        {showHowItWorks && (
+        <Flex flexDirection="column" style={{ marginTop: 10 }}>
         <Flex gap={8} style={{ marginBottom: 8 }}>
           <Text style={{ color: accent, fontWeight: 800, fontSize: 14, lineHeight: 1.3, flexShrink: 0 }}>1.</Text>
           <Text><Strong style={{ color: text }}>Choose capabilities</Strong> on the right panel — use the checkbox on each card to include or exclude it. Then click <Strong style={{ color: text }}>Run Assessment</Strong>. If no capability is deselected, a <Strong style={{ color: text }}>full assessment</Strong> runs automatically across all {CAPABILITIES.length} capabilities.</Text>
@@ -1576,6 +1615,8 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
         <Text style={{ marginTop: 12, padding: "8px 12px", borderRadius: 8, fontSize: 12, lineHeight: 1.5, background: Colors.Background.Container.Success.Default, border: `1px solid ${Colors.Border.Success.Default}`, color: textSec }}>
           <Strong style={{ color: Colors.Text.Success.Default }}>Tip:</Strong> You can deselect capabilities that are not relevant to your environment using the ☑ checkbox on each card. The assessment will only query the selected ones, making it faster and more focused.
         </Text>
+        </Flex>
+        )}
         <Text style={{ marginTop: 16, fontSize: 11, color: textTert }}>v{APP_VERSION}</Text>
       </Flex>
     </Flex>

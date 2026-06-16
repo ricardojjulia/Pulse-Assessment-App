@@ -1,0 +1,18 @@
+{
+  "$schema": "https://developer.dynatrace.com/docs-assets/schema_strict_apps.json",
+  "schemaId": "config",
+  "version": "1",
+  "displayName": "Tenant Review Configuration",
+  "description": "Global configuration for the Tenant Review app — thresholds, weights, and check enable/disable. Edited via the in-app Configuration page (gear icon).",
+  "dynatrace": "1",
+  "multiObject": false,
+  "ordered": false,
+  "properties": {
+    "configJson": {
+      "type": "text",
+      "default": "",
+      "description": "JSON-encoded ReviewConfig object. Use the in-app Configuration page to edit.",
+      "displayName": "Configuration (JSON)"
+    }
+  }
+}

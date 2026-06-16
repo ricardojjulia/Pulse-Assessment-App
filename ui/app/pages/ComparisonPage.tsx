@@ -5,7 +5,6 @@ import Colors from "@dynatrace/strato-design-tokens/colors";
 import { Button } from "@dynatrace/strato-components/buttons";
 import { ExternalLink, Text } from "@dynatrace/strato-components/typography";
 import { Flex, Grid, Surface, Container } from "@dynatrace/strato-components/layouts";
-import { ToggleButtonGroup, ToggleButtonGroupItem } from "@dynatrace/strato-components-preview/buttons";
 import { Tooltip } from "../components/Tooltip";
 import { ExpandableChartModal, ExpandChartButton } from "../components/ExpandableChartModal";
 import { CovMatRadar } from "../components/CovMatRadar";
@@ -15,6 +14,7 @@ import { CAPABILITIES } from "../queries";
 import type { AssessmentSnapshot } from "../hooks/useAssessmentHistory";
 import type { CoverageData, CapabilityResult } from "../hooks/useCoverageData";
 import { FOUNDATION_WEIGHT, BEST_PRACTICE_WEIGHT, EXCELLENCE_WEIGHT } from "../hooks/useCoverageData";
+import { SegmentedControl } from "../components/SegmentedControl";
 
 /** Lookup: criterion ID → true if it uses cross-entity ratio (queryB). Derived from static CAPABILITIES definition. */
 const IS_RATIO_MAP: Record<string, boolean> = {};
@@ -338,10 +338,14 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, coverageData, saveS
               <Flex alignItems="center" justifyContent="space-between" style={{ marginBottom: 2 }}>
                 <Flex alignItems="center" gap={8} flexWrap="wrap">
                   <Text style={{ fontSize: 14, fontWeight: 800, color: text, letterSpacing: 0.2 }}>{dimension === "coverage" ? "Coverage" : "Maturity"} Comparison</Text>
-                  <ToggleButtonGroup value={dimension} onChange={(val: string) => setDimension(val as "coverage" | "maturity")}>
-                    <ToggleButtonGroupItem value="coverage">Coverage</ToggleButtonGroupItem>
-                    <ToggleButtonGroupItem value="maturity">Maturity</ToggleButtonGroupItem>
-                  </ToggleButtonGroup>
+                  <SegmentedControl
+                    value={dimension}
+                    onChange={setDimension}
+                    options={[
+                      { value: "coverage", label: "Coverage" },
+                      { value: "maturity", label: "Maturity" },
+                    ]}
+                  />
                 </Flex>
                 <ExpandChartButton onClick={() => setExpandedRadar(true)} />
               </Flex>

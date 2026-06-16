@@ -79,44 +79,26 @@
   <path d="M30 62 L33.5 60 L33.5 63 C33.5 65 32 66.5 30 67.5 C28 66.5 26.5 65 26.5 63 L26.5 60 Z"
     fill="none" stroke="#00E5FF" stroke-width="0.8" opacity="0.6"/>
 
-  <!-- === PA Letters (crystalline/faceted, center) === -->
-  <!-- P letter -->
-  <g filter="url(#glowStrong)" opacity="0.9">
-    <!-- P vertical bar -->
-    <polygon points="40,42 44,42 44,82 40,82" fill="url(#letterG)" opacity="0.7"/>
-    <!-- P bump/curve top -->
-    <polygon points="44,42 62,42 64,44 64,56 62,58 44,58" fill="url(#letterG)" opacity="0.55"/>
-    <!-- P inner cutout (darker) -->
-    <polygon points="47,46 59,46 60,47 60,53 59,54 47,54" fill="#0B1628" opacity="0.7"/>
-    <!-- Facet highlight lines -->
-    <line x1="44" y1="42" x2="56" y2="48" stroke="#FFFFFF" stroke-width="0.3" opacity="0.3"/>
-    <line x1="62" y1="42" x2="52" y2="52" stroke="#80FFEA" stroke-width="0.3" opacity="0.25"/>
+  <!-- ESA mark (center) -->
+  <g filter="url(#glowStrong)">
+    <text x="64" y="73"
+      text-anchor="middle"
+      font-family="Inter, Arial, Helvetica, sans-serif"
+      font-size="31"
+      font-weight="900"
+      letter-spacing="-1"
+      fill="url(#letterG)"
+      opacity="0.96">ESA</text>
+    <line x1="38" y1="80" x2="90" y2="80" stroke="#80FFEA" stroke-width="1.2" opacity="0.65" stroke-linecap="round"/>
+    <line x1="44" y1="86" x2="84" y2="86" stroke="#36B37E" stroke-width="1" opacity="0.45" stroke-linecap="round"/>
   </g>
 
-  <!-- A letter -->
-  <g filter="url(#glowStrong)" opacity="0.9">
-    <!-- A left leg -->
-    <polygon points="64,82 70,42 74,42 68,82" fill="url(#letterG)" opacity="0.7"/>
-    <!-- A right leg -->
-    <polygon points="78,42 82,42 88,82 84,82" fill="url(#letterG)" opacity="0.6"/>
-    <!-- A crossbar -->
-    <polygon points="67,66 85,66 84,62 68,62" fill="url(#letterG)" opacity="0.55"/>
-    <!-- A top peak -->
-    <polygon points="70,42 78,42 74,34" fill="url(#letterG)" opacity="0.65"/>
-    <!-- Facet highlights -->
-    <line x1="74" y1="34" x2="70" y2="52" stroke="#FFFFFF" stroke-width="0.3" opacity="0.3"/>
-    <line x1="74" y1="34" x2="82" y2="52" stroke="#80FFEA" stroke-width="0.3" opacity="0.2"/>
-  </g>
-
-  <!-- Sparkle on P -->
-  <g opacity="0.6">
-    <line x1="50" y1="39" x2="50" y2="35" stroke="#FFFFFF" stroke-width="0.5"/>
-    <line x1="48" y1="37" x2="52" y2="37" stroke="#FFFFFF" stroke-width="0.5"/>
-  </g>
-  <!-- Sparkle on A -->
-  <g opacity="0.5">
-    <line x1="80" y1="38" x2="80" y2="34" stroke="#FFFFFF" stroke-width="0.5"/>
-    <line x1="78" y1="36" x2="82" y2="36" stroke="#FFFFFF" stroke-width="0.5"/>
+  <!-- Sparkles on ESA -->
+  <g opacity="0.58" stroke="#FFFFFF" stroke-width="0.6">
+    <line x1="49" y1="39" x2="49" y2="35"/>
+    <line x1="47" y1="37" x2="51" y2="37"/>
+    <line x1="79" y1="38" x2="79" y2="34"/>
+    <line x1="77" y1="36" x2="81" y2="36"/>
   </g>
 
   <!-- Dynatrace Flame (upper-right) -->

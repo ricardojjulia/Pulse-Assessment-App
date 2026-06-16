@@ -13,6 +13,9 @@ const CoverageAssessment = React.lazy(() =>
 const ComparisonPage = React.lazy(() =>
   import("./pages/ComparisonPage").then(m => ({ default: m.ComparisonPage }))
 );
+const TenantReviewApp = React.lazy(() =>
+  import("./tenantReview/TenantReviewApp").then(m => ({ default: m.TenantReviewApp }))
+);
 
 export const App = () => {
   const history = useAssessmentHistory();
@@ -37,6 +40,7 @@ export const App = () => {
             <Routes>
               <Route path="/" element={<CoverageAssessment history={history} coverageData={coverageData} />} />
               <Route path="/compare" element={<ComparisonPage snapshots={history.snapshots} coverageData={coverageData} saveSnapshot={history.saveSnapshot} />} />
+              <Route path="/tenant-review/*" element={<TenantReviewApp />} />
             </Routes>
           </Suspense>
         </Page.Main>
