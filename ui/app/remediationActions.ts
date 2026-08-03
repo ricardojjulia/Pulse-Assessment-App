@@ -47,6 +47,11 @@ export const CRITERION_ACTIONS: Record<string, RemediationAction> = {
   a11: { action: "Verify services have associated process groups for service-to-infrastructure topology mapping.", docUrl: "https://docs.dynatrace.com/docs/observe/application-observability/services", docLabel: "Service-process mapping" },
   a12: { action: "Assign tags to services for release tracking, ownership mapping, and filtering.", docUrl: "https://docs.dynatrace.com/docs/manage/tags-and-metadata", docLabel: "Service tagging" },
   a13: { action: "Enable deep database call tracing in services. Ensure services connected to multiple DB systems have all db.system attributes tracked.", docUrl: "https://docs.dynatrace.com/docs/observe/application-observability/services", docLabel: "Database call depth" },
+  a14: { action: "Propagate trace context from browser requests into backend spans. Make sure RUM is enabled and trace headers survive proxies/gateways.", docUrl: "https://docs.dynatrace.com/docs/observe/application-observability/distributed-tracing", docLabel: "Frontend trace correlation" },
+  a15: { action: "Add HTTP method and route metadata to spans so trace views are route-aware instead of showing only generic request timings.", docUrl: "https://docs.dynatrace.com/docs/observe/application-observability/services", docLabel: "Route metadata" },
+  a16: { action: "Capture exceptions in spans so failures are visible directly in trace context instead of only in logs.", docUrl: "https://docs.dynatrace.com/docs/observe/application-observability/distributed-tracing", docLabel: "Exception trace coverage" },
+  a17: { action: "Add service version and deployment environment metadata to spans to tie regressions to releases and environments.", docUrl: "https://docs.dynatrace.com/docs/observe/application-observability/services", docLabel: "Release context" },
+  a18: { action: "Emit trace_id and span_id into logs with structured logging or OpenTelemetry enrichment for instant log-to-trace correlation.", docUrl: "https://docs.dynatrace.com/docs/analyze-explore-automate/logs", docLabel: "Trace-log correlation" },
 
   // ── Digital Experience ──
   d1:  { action: "Create a web application in Dynatrace and inject the RUM JavaScript snippet for user action tracking.", docUrl: "https://docs.dynatrace.com/docs/observe/digital-experience/web-applications", docLabel: "RUM user action setup" },
@@ -60,6 +65,10 @@ export const CRITERION_ACTIONS: Record<string, RemediationAction> = {
   d9:  { action: "Integrate the Dynatrace Mobile SDK (iOS/Android) into your native apps for mobile RUM.", docUrl: "https://docs.dynatrace.com/docs/observe/digital-experience/mobile-applications", docLabel: "Mobile app monitoring" },
   d10: { action: "Add multiple synthetic locations (public and/or private) for broader geographic coverage.", docUrl: "https://docs.dynatrace.com/docs/observe/digital-experience/synthetic-monitoring", docLabel: "Synthetic location diversity" },
   d11: { action: "Create synthetic monitors and verify execution availability metrics are captured.", docUrl: "https://docs.dynatrace.com/docs/observe/digital-experience/synthetic-monitoring", docLabel: "Synthetic availability" },
+  d12: { action: "Enable session replay on your most important web apps so teams can replay the exact user path that led to a problem.", docUrl: "https://docs.dynatrace.com/docs/observe/digital-experience/session-replay/enable-session-replay-web", docLabel: "Session replay" },
+  d13: { action: "Instrument navigation events and clickpaths to surface funnel drop-offs and key journey breakpoints.", docUrl: "https://docs.dynatrace.com/docs/observe/digital-experience/web-applications", docLabel: "Navigation journeys" },
+  d14: { action: "Ensure web and mobile apps emit page and view summaries so engagement depth is measurable.", docUrl: "https://docs.dynatrace.com/docs/observe/digital-experience/web-applications", docLabel: "Page/view summaries" },
+  d15: { action: "Instrument mobile apps with the Dynatrace Mobile SDK and verify crash / ANR telemetry is flowing for triage.", docUrl: "https://docs.dynatrace.com/docs/observe/digital-experience/mobile-applications", docLabel: "Mobile crash telemetry" },
 
   // ── Log Analytics ──
   l1:  { action: "Activate log ingestion via OneAgent on hosts. Verify host-level logs are flowing to Grail.", docUrl: "https://docs.dynatrace.com/docs/analyze-explore-automate/logs", docLabel: "Host log ingestion" },
@@ -82,7 +91,7 @@ export const CRITERION_ACTIONS: Record<string, RemediationAction> = {
   // ── Application Security ──
   s1:  { action: "Enable Runtime Application Protection and Vulnerability Analytics in security settings for service coverage.", docUrl: "https://docs.dynatrace.com/docs/secure/application-security", docLabel: "Security service coverage" },
   s2:  { action: "Ensure multiple security event types are detected. Review security event configuration.", docUrl: "https://docs.dynatrace.com/docs/secure/application-security", docLabel: "Security event types" },
-  s3:  { action: "Ensure services have associated process groups for Runtime Vulnerability Analytics coverage.", docUrl: "https://docs.dynatrace.com/docs/secure/application-security/vulnerability-analytics", docLabel: "Vulnerability baseline" },
+  s3:  { action: "Enable Runtime Vulnerability Analytics and confirm vulnerability-related security events are present for services within the last 30 days.", docUrl: "https://docs.dynatrace.com/docs/secure/application-security/vulnerability-analytics", docLabel: "30-day vulnerability baseline" },
   s4:  { action: "Enable database operation tracing for SQL injection detection surface coverage.", docUrl: "https://docs.dynatrace.com/docs/observe/application-observability/services", docLabel: "Database security tracing" },
   s5:  { action: "Ensure services emit ERROR-level logs for security event correlation and threat detection.", docUrl: "https://docs.dynatrace.com/docs/analyze-explore-automate/logs", docLabel: "Error log security" },
   s6:  { action: "Configure WARN-level log collection for security context — detect reconnaissance and brute-force patterns.", docUrl: "https://docs.dynatrace.com/docs/analyze-explore-automate/logs", docLabel: "Warning log security" },
@@ -111,7 +120,7 @@ export const CRITERION_ACTIONS: Record<string, RemediationAction> = {
   ai3: { action: "Monitor multiple AI providers. Add gen_ai.system attribute to distinguish vendors.", docUrl: "https://docs.dynatrace.com/docs/observe/dynatrace-for-ai-observability", docLabel: "AI provider diversity" },
   ai4: { action: "Add gen_ai.agent.name attribute to spans for AI agent invocation tracking.", docUrl: "https://docs.dynatrace.com/docs/observe/dynatrace-for-ai-observability", docLabel: "Agent monitoring" },
   ai5: { action: "Enable prompt/response capture in AI span attributes for audit and compliance.", docUrl: "https://docs.dynatrace.com/docs/observe/dynatrace-for-ai-observability", docLabel: "Prompt tracing" },
-  ai6: { action: "Track AI errors by setting span status to ERROR on model failures and timeouts.", docUrl: "https://docs.dynatrace.com/docs/observe/dynatrace-for-ai-observability", docLabel: "AI error tracking" },
+  ai6: { action: "Capture AI span status for every model call and reserve ERROR status for actual failures/timeouts.", docUrl: "https://docs.dynatrace.com/docs/observe/dynatrace-for-ai-observability", docLabel: "AI status tracking" },
   ai7: { action: "Implement guardrail monitoring with gen_ai.guardrail attributes for safety compliance.", docUrl: "https://docs.dynatrace.com/docs/observe/dynatrace-for-ai-observability", docLabel: "Guardrail monitoring" },
   ai8: { action: "Add gen_ai.usage.cost attribute to AI spans for per-request cost tracking.", docUrl: "https://docs.dynatrace.com/docs/observe/dynatrace-for-ai-observability", docLabel: "AI cost tracking" },
   ai9: { action: "Expand AI span instrumentation to cover more services for broader AI tracing breadth.", docUrl: "https://docs.dynatrace.com/docs/observe/dynatrace-for-ai-observability", docLabel: "AI tracing breadth" },

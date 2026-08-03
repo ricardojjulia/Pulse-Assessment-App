@@ -787,7 +787,7 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
   // ── Per-capability gaps ──
   const capGaps = useMemo(() =>
     capabilities.map(cap => {
-      const gaps = cap.criteriaResults.filter(cr => !cr.error && cr.points === 0);
+      const gaps = cap.criteriaResults.filter(cr => !cr.error && !cr.notApplicable && cr.points === 0);
       const critical = gaps.filter(cr => cr.value === 0).length;
       const quickWin = gaps.filter(cr => cr.isRatio && cr.value > 0 && cr.value < 100).length;
       const other = gaps.length - critical - quickWin;
@@ -811,8 +811,8 @@ function RecommendationsView({ capabilities, dk, text, textSec, textTert, totalS
   );
 
   // ── KPI helpers ──
-  const totalCriteria = capabilities.reduce((s, c) => s + c.criteriaResults.length, 0);
-  const passedCriteria = capabilities.reduce((s, c) => s + c.criteriaResults.filter(cr => !cr.error && cr.points > 0).length, 0);
+  const totalCriteria = capabilities.reduce((s, c) => s + c.criteriaResults.filter(cr => !cr.notApplicable).length, 0);
+  const passedCriteria = capabilities.reduce((s, c) => s + c.criteriaResults.filter(cr => !cr.error && !cr.notApplicable && cr.points > 0).length, 0);
   const totalCritical = capGaps.reduce((s, c) => s + c.critical, 0);
   const totalQuickWin = capGaps.reduce((s, c) => s + c.quickWin, 0);
   const totalOther = capGaps.reduce((s, c) => s + c.other, 0);
@@ -1242,6 +1242,7 @@ function MaturityCriterionRow({ cr, dk, text, textSec, textTert, collapseKey }: 
   const [open, setOpen] = useState(false);
   useEffect(() => { setOpen(false); }, [collapseKey]);
   const passed = !cr.error && cr.points > 0;
+  const statusColor = cr.notApplicable ? Colors.Text.Neutral.Disabled : passed ? Colors.Text.Success.Default : Colors.Text.Critical.Default;
   const importance = CRITERION_IMPORTANCE[cr.id] || "";
   const remediation = CRITERION_REMEDIATION[cr.id];
 
@@ -1258,12 +1259,14 @@ function MaturityCriterionRow({ cr, dk, text, textSec, textTert, collapseKey }: 
       >
         <Text style={{
           width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
-          background: passed ? Colors.Text.Success.Default : Colors.Text.Critical.Default,
+          background: statusColor,
         }} />
         <Tooltip text={criterionTooltipContent(cr.id, cr.description, cr.tier)} containerStyle={{ flex: 1 }} maxWidth={340}>
           <Text style={{ color: passed ? text : textSec }}>{cr.label}</Text>
         </Tooltip>
-        {cr.value > 0 && (
+        {cr.notApplicable ? (
+          <Text style={{ fontSize: 12, color: textTert, fontWeight: 700 }}>N/A</Text>
+        ) : cr.value > 0 && (
           <Text style={{ fontSize: 12, color: textTert, fontWeight: 600 }}>{cr.isRatio ? `${cr.value}%` : cr.value.toLocaleString()}</Text>
         )}
         <Text style={{ fontSize: 12, color: textTert, fontWeight: 600 }}>{open ? "▾" : "▸"}</Text>
@@ -1276,7 +1279,7 @@ function MaturityCriterionRow({ cr, dk, text, textSec, textTert, collapseKey }: 
             margin: "4px 0 8px 16px", padding: "12px 16px", borderRadius: 8,
             background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.015)",
             border: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
-            borderLeft: `3px solid ${passed ? Colors.Text.Success.Default : Colors.Text.Critical.Default}`,
+            borderLeft: `3px solid ${statusColor}`,
             animation: "fadeIn 0.2s ease",
           }}
         >
@@ -1286,7 +1289,7 @@ function MaturityCriterionRow({ cr, dk, text, textSec, textTert, collapseKey }: 
           </Flex>
 
           {/* Measured value badge — shows current vs target for failed criteria */}
-          {!passed && !cr.error && (
+          {!passed && !cr.error && !cr.notApplicable && (
             <Flex style={{
               display: "inline-flex", alignItems: "center", gap: 10, marginBottom: 12,
               padding: "6px 12px", borderRadius: 6,
@@ -1304,8 +1307,8 @@ function MaturityCriterionRow({ cr, dk, text, textSec, textTert, collapseKey }: 
                 <Text style={{ fontSize: 12, color: textTert }}>Minimum:</Text>
                 <Text style={{ fontSize: 14, fontWeight: 800, color: Colors.Text.Success.Default }}>
                   {cr.isRatio
-                    ? `${cr.thresholds.split(", ").pop()?.match(/≥(\d+)/)?.[1] ?? "1"}%`
-                    : cr.thresholds.split(", ").pop()?.match(/≥(\d+)/)?.[1] ?? "1"
+                    ? `${cr.thresholds.split(", ")[0]?.match(/[≥≤](\d+)/)?.[1] ?? "1"}%`
+                    : cr.thresholds.split(", ")[0]?.match(/[≥≤](\d+)/)?.[1] ?? "1"
                   }
                 </Text>
               </Flex>
@@ -1325,6 +1328,18 @@ function MaturityCriterionRow({ cr, dk, text, textSec, textTert, collapseKey }: 
             </Flex>
           )}
 
+          {cr.notApplicable && !cr.error && (
+            <Flex style={{
+              display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 12,
+              padding: "6px 12px", borderRadius: 6,
+              background: dk ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+              border: `1px solid ${dk ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+              fontSize: 12, color: textTert, fontWeight: 600,
+            }}>
+              Not applicable for this tenant based on discovered inventory or signal presence.
+            </Flex>
+          )}
+
           {/* Why it matters */}
           {importance && (
             <Flex flexDirection="column" style={{ marginBottom: 12 }}>
@@ -1334,7 +1349,7 @@ function MaturityCriterionRow({ cr, dk, text, textSec, textTert, collapseKey }: 
           )}
 
           {/* How to evolve */}
-          {remediation && !passed && (
+          {remediation && !passed && !cr.notApplicable && (
             <Flex flexDirection="column" style={{
               padding: "8px 12px", borderRadius: 6,
               background: dk ? "rgba(0,200,83,0.06)" : "rgba(0,200,83,0.03)",
@@ -1507,7 +1522,7 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
         >
           {preflight.running ? "Validating…" : selectedCount === 0 ? "Select at least 1 capability" : selectedCount < totalCount ? `Run Assessment (${selectedCount}/${totalCount})` : "Run Assessment"}
         </Button>
-        <Button onClick={() => navigate("/tenant-review")} size="condensed" style={{ marginTop: 8 }}>
+        <Button onClick={() => navigate("/tenant-review")} variant="emphasized" color="primary" style={{ marginTop: 8 }}>
           Tenant Review
         </Button>
         {hasResults && (
@@ -1894,12 +1909,14 @@ function CriterionRow({ cr, idx, capColor, dk, text, textSec, collapseKey }: {
               <Flex flexDirection="column">
                 <Flex flexDirection="column" style={{ fontSize: 12, fontWeight: 700, color: textSec, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.8 }}>Pass thresholds</Flex>
                 <Flex gap={6} flexWrap="wrap">
-                  {[...cr.thresholds].sort((a, b) => b.min - a.min).map((t, ti) => (
+                  {[...cr.thresholds]
+                    .sort((a, b) => (b.min ?? Number.NEGATIVE_INFINITY) - (a.min ?? Number.NEGATIVE_INFINITY))
+                    .map((t, ti) => (
                     <Text key={ti} style={{
                       fontSize: 12, padding: "3px 12px", borderRadius: 6,
                       background: Colors.Background.Container.Neutral.Subdued,
                       color: textSec, fontWeight: 600,
-                    }}>≥ {t.min}</Text>
+                    }}>{typeof t.min === "number" ? `≥ ${t.min}` : "max" in t ? `≤ ${t.max}` : ""}</Text>
                   ))}
                 </Flex>
               </Flex>

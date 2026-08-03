@@ -21,11 +21,13 @@ export function useRumReview(): ReviewAreaResult {
 
   const appCount = useDql(DQL_QUERIES.applicationCount);
   const mobileAppCount = useDql(DQL_QUERIES.mobileAppCount);
+  const rumEventVolume = useDql(DQL_QUERIES.rumEventVolume);
   const analyzedRef = useRef(false);
 
   useEffect(() => {
     if (appCount.isLoading || appCount.isPending) return;
     if (mobileAppCount.isLoading || mobileAppCount.isPending) return;
+    if (rumEventVolume.isLoading || rumEventVolume.isPending) return;
     if (analyzedRef.current) return;
     analyzedRef.current = true;
     let cancelled = false;
@@ -42,6 +44,7 @@ export function useRumReview(): ReviewAreaResult {
         const checks: Check[] = [];
 
         const apps = Number((appCount.data?.records?.[0] as Record<string, unknown>)?.["count()"] ?? 0);
+        const rumEvents = Number((rumEventVolume.data?.records?.[0] as Record<string, unknown>)?.["total"] ?? 0);
         const rumWebConfigs = counts.get(SETTINGS_SCHEMAS.rumWeb) ?? 0;
         const sessionReplayConfigs = counts.get(SETTINGS_SCHEMAS.sessionReplay) ?? 0;
 
@@ -69,11 +72,47 @@ export function useRumReview(): ReviewAreaResult {
           });
         }
 
-        // Check 2: RUM web config in Settings 2.0
+        // Check 2: Recent RUM user events prove utilization, not just configuration.
+        if (apps > 0) {
+          checks.push({
+            name: "RUM user events flowing",
+            weight: 0.25,
+            result: rumEventVolume.error ? "partial" : rumEvents > 0 ? "pass" : "fail",
+            partialValue: rumEventVolume.error ? 0.3 : undefined,
+          });
+          if (rumEventVolume.error) {
+            findings.push({
+              id: "rum-events-error",
+              title: "Cannot access RUM user events",
+              description: "RUM utilization could not be confirmed from Grail user events.",
+              severity: "info",
+              recommendation: "Verify the app has permission to query user.events data.",
+            });
+          } else if (rumEvents > 0) {
+            findings.push({
+              id: "rum-events-active",
+              title: `${rumEvents.toLocaleString()} RUM user event(s) in last 30 days`,
+              description: "RUM applications are actively receiving user experience data in Grail.",
+              severity: "success",
+              recommendation: "Use DQL over user events for frontend experience dashboards and investigations.",
+            });
+          } else {
+            findings.push({
+              id: "rum-events-none",
+              title: "RUM applications configured, but no user events in last 30 days",
+              description: "Configured RUM apps are not enough for Gen3 adoption; recent user-event flow proves active utilization.",
+              severity: "warning",
+              recommendation: "Verify JavaScript injection, beacon delivery, app detection rules, and privacy settings.",
+            });
+          }
+        }
+
+        // Check 3: RUM web config in Settings 2.0
         checks.push({
           name: "RUM configuration in Settings 2.0",
-          weight: 0.25,
-          result: rumWebConfigs > 0 ? "pass" : apps === 0 ? "pass" : "fail",
+          weight: 0.20,
+          result: apps === 0 ? "partial" : rumWebConfigs > 0 ? "pass" : "fail",
+          partialValue: apps === 0 ? 0.3 : undefined,
         });
         if (apps > 0 && rumWebConfigs === 0) {
           findings.push({
@@ -85,13 +124,15 @@ export function useRumReview(): ReviewAreaResult {
           });
         }
 
-        // Check 3: Session Replay
-        checks.push({
-          name: "Session Replay configured",
-          weight: 0.2,
-          result: sessionReplayConfigs > 0 ? "pass" : apps === 0 ? "pass" : "partial",
-          partialValue: 0.3,
-        });
+        // Check 4: Session Replay. Optional without apps; scored only when RUM apps exist.
+        if (apps > 0) {
+          checks.push({
+            name: "Session Replay configured",
+            weight: 0.15,
+            result: sessionReplayConfigs > 0 ? "pass" : "partial",
+            partialValue: 0.3,
+          });
+        }
         if (apps > 0 && sessionReplayConfigs === 0) {
           findings.push({
             id: "rum-no-replay",
@@ -102,10 +143,10 @@ export function useRumReview(): ReviewAreaResult {
           });
         }
 
-        // Check 4: DQL migration from USQL
+        // Check 5: DQL migration from USQL
         checks.push({
           name: "DQL migration readiness",
-          weight: 0.25,
+          weight: 0.15,
           result: "partial",
           partialValue: 0.6,
         });
@@ -114,10 +155,10 @@ export function useRumReview(): ReviewAreaResult {
           title: "USQL to DQL migration",
           description: "USQL (User Session Query Language) is deprecated. Use DQL queries against Grail for session data analysis.",
           severity: "info",
-          recommendation: "Migrate any USQL queries to DQL. Use 'fetch dt.rum.*' data sources in DQL.",
+          recommendation: "Migrate any USQL queries to DQL. Use Grail user event/session data such as user.events for frontend analysis.",
         });
 
-        // Check 5: Mobile App Monitoring
+        // Check 6: Mobile App Monitoring
         const mobileApps = Number((mobileAppCount.data?.records?.[0] as Record<string, unknown>)?.["count()"] ?? 0);
         if (config.mobileApps.enabled) {
           checks.push({
@@ -143,7 +184,7 @@ export function useRumReview(): ReviewAreaResult {
         // Summary
         findings.push({
           id: "rum-summary",
-          title: `RUM summary: ${apps} apps, ${rumWebConfigs} web configs, ${sessionReplayConfigs} replay configs`,
+          title: `RUM summary: ${apps} apps, ${rumEvents.toLocaleString()} user events (30d), ${rumWebConfigs} web configs, ${sessionReplayConfigs} replay configs`,
           description: "RUM data is transitioning to Grail storage. USQL should be replaced with DQL queries.",
           severity: "info",
           recommendation: "Complete USQL to DQL migration and ensure Session Replay is enabled for critical apps.",
@@ -153,12 +194,12 @@ export function useRumReview(): ReviewAreaResult {
         const areaWeight = getAreaWeight(config, "rum");
         const score = calculateAreaScore(checks, areaWeight);
 
-        // Migration: RUM is in transition to Grail
-        const gen3Signals = (rumWebConfigs > 0 ? 1 : 0) + (sessionReplayConfigs > 0 ? 1 : 0);
+        // Migration: RUM is in transition to Grail. Count recent user events as the utilization signal.
+        const gen3Signals = (rumWebConfigs > 0 ? 1 : 0) + (sessionReplayConfigs > 0 ? 1 : 0) + (rumEvents > 0 ? 1 : 0);
         const migration = buildMigrationMetrics(
-          2 - gen3Signals,
+          3 - gen3Signals,
           gen3Signals,
-          "{gen3} of 2 RUM Settings 2.0 configs present ({pct}%)"
+          "{gen3} of 3 RUM Gen3 signals present ({pct}%)"
         );
 
         setResult({
@@ -184,7 +225,8 @@ export function useRumReview(): ReviewAreaResult {
     void analyze();
     return () => { cancelled = true; };
   }, [appCount.isLoading, appCount.isPending, appCount.data, appCount.error,
-    mobileAppCount.isLoading, mobileAppCount.isPending, mobileAppCount.data, mobileAppCount.error]);
+    mobileAppCount.isLoading, mobileAppCount.isPending, mobileAppCount.data, mobileAppCount.error,
+    rumEventVolume.isLoading, rumEventVolume.isPending, rumEventVolume.data, rumEventVolume.error]);
 
   return result;
 }

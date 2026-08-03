@@ -1,0 +1,246 @@
+{
+  "total": 28,
+  "categories": [
+    "AppEngine",
+    "AutomationEngine",
+    "Classic environment",
+    "Davis AI",
+    "Document",
+    "Email",
+    "Grail",
+    "Hub",
+    "Identity and Access Management",
+    "Notification",
+    "OpenPipeline",
+    "Platform management",
+    "Service-Level Objectives",
+    "State service",
+    "Vulnerabilities"
+  ],
+  "apis": [
+    {
+      "category": "AppEngine",
+      "name": "AppEngine – App Functions",
+      "description": "These functions represent the backend of an app and are built, bundled, and deployed together with your custom app.",
+      "primaryName": "AppEngine - App Functions",
+      "swaggerUrl": "https://wkf10640.apps.dynatrace.com/platform/swagger-ui/index.html?urls.primaryName=AppEngine+-+App+Functions",
+      "host": "wkf10640.apps.dynatrace.com"
+    },
+    {
+      "category": "AppEngine",
+      "name": "AppEngine – EdgeConnect",
+      "description": "Configures URL host patterns to securely forward HTTP requests from the Dynatrace runtime to private network resources via EdgeConnect",
+      "primaryName": "AppEngine - EdgeConnect",
+      "swaggerUrl": "https://wkf10640.apps.dynatrace.com/platform/swagger-ui/index.html?urls.primaryName=AppEngine+-+EdgeConnect",
+      "host": "wkf10640.apps.dynatrace.com"
+    },
+    {
+      "category": "AppEngine",
+      "name": "AppEngine – Function Executor",
+      "description": "The function executor is an API that allows you to execute code (that you haven't bundled with apps) inside Dynatrace AppEngine.",
+      "primaryName": "AppEngine - Function Executor",
+      "swaggerUrl": "https://wkf10640.apps.dynatrace.com/platform/swagger-ui/index.html?urls.primaryName=AppEngine+-+Function+Executor",
+      "host": "wkf10640.apps.dynatrace.com"
+    },
+    {
+      "category": "AppEngine",
+      "name": "AppEngine – Registry",
+      "description": "The Registry is mainly responsible for installing, updating, storing apps, uninstalling, removing apps, and getting apps.",
+      "primaryName": "AppEngine - Registry",
+      "swaggerUrl": "https://wkf10640.apps.dynatrace.com/platform/swagger-ui/index.html?urls.primaryName=AppEngine+-+Registry",
+      "host": "wkf10640.apps.dynatrace.com"
+    },
+    {
+      "category": "AutomationEngine",
+      "name": "Automation",
+      "description": "Manage and run workflows with the AutomationEngine API.",
+      "primaryName": "Automation",
+      "swaggerUrl": "https://wkf10640.apps.dynatrace.com/platform/swagger-ui/index.html?urls.primaryName=Automation",
+      "host": "wkf10640.apps.dynatrace.com"
+    },
+    {
+      "category": "Classic environment",
+      "name": "Environment API v1",
+      "description": "Automate your monitoring tasks and export different types of data into your third-party reporting and analysis tools.",
+      "primaryName": "Environment API v1",
+      "swaggerUrl": "https://wkf10640.live.dynatrace.com/rest-api-doc/index.jsp?urls.primaryName=Environment%20API%20v1",
+      "host": "wkf10640.live.dynatrace.com"
+    },
+    {
+      "category": "Classic environment",
+      "name": "Environment API v2",
+      "description": "Automate your monitoring tasks and export different types of data into your third-party reporting and analysis tools.",
+      "primaryName": "Environment API v2",
+      "swaggerUrl": "https://wkf10640.live.dynatrace.com/rest-api-doc/index.jsp?urls.primaryName=Environment%20API%20v2",
+      "host": "wkf10640.live.dynatrace.com"
+    },
+    {
+      "category": "Classic environment",
+      "name": "Configuration API",
+      "description": "Manage and keep track of your Dynatrace monitoring environment configurations.",
+      "primaryName": "Configuration API",
+      "swaggerUrl": "https://wkf10640.live.dynatrace.com/rest-api-doc/index.jsp?urls.primaryName=Configuration%20API",
+      "host": "wkf10640.live.dynatrace.com"
+    },
+    {
+      "category": "Davis AI",
+      "name": "Davis AI – Predictive and Causal",
+      "description": "Explore our Davis AI – Predictive and Causal API.",
+      "primaryName": "Davis AI - Predictive and Causal",
+      "swaggerUrl": "https://wkf10640.apps.dynatrace.com/platform/swagger-ui/index.html?urls.primaryName=Davis+AI+-+Predictive+and+Causal",
+      "host": "wkf10640.apps.dynatrace.com"
+    },
+    {
+      "category": "Davis AI",
+      "name": "Davis CoPilot – Generative AI (Preview)",
+      "description": "This API allows you to interact with Davis CoPilot Generative AI. The API is in preview and is subject to the Dynatrace preview conditions.",
+      "primaryName": "Davis CoPilot – Generative AI (Preview)",
+      "swaggerUrl": "https://wkf10640.apps.dynatrace.com/platform/swagger-ui/index.html?urls.primaryName=Davis+CoPilot+%E2%80%93+Generative+AI+%28Preview%29",
+      "host": "wkf10640.apps.dynatrace.com"
+    },
+    {
+      "category": "Document",
+      "name": "Document Service",
+      "description": "This API allows you to create and manage documents, as well as manage access to them.",
+      "primaryName": "Document Service",
+      "swaggerUrl": "https://wkf10640.apps.dynatrace.com/platform/swagger-ui/index.html?urls.primaryName=Document+Service",
+      "host": "wkf10640.apps.dynatrace.com"
+    },
+    {
+      "category": "Email",
+      "name": "Email",
+      "description": "APIs that allow sending emails.",
+      "primaryName": "Email",
+      "swaggerUrl": "https://wkf10640.apps.dynatrace.com/platform/swagger-ui/index.html?urls.primaryName=Email",
+      "host": "wkf10640.apps.dynatrace.com"
+    },
+    {
+      "category": "Grail",
+      "name": "Grail – DQL Query",
+      "description": "Exposes an API to fetch records stored in Grail.",
+      "primaryName": "Grail - DQL Query",
+      "swaggerUrl": "https://wkf10640.apps.dynatrace.com/platform/swagger-ui/index.html?urls.primaryName=Grail+-+DQL+Query",
+      "host": "wkf10640.apps.dynatrace.com"
+    },
+    {
+      "category": "Grail",
+      "name": "Grail – Fieldsets",
+      "description": "Fieldset management for Grail.",
+      "primaryName": "Grail - Fieldsets",
+      "swaggerUrl": "https://wkf10640.apps.dynatrace.com/platform/swagger-ui/index.html?urls.primaryName=Grail+-+Fieldsets",
+      "host": "wkf10640.apps.dynatrace.com"
+    },
+    {
+      "category": "Grail",
+      "name": "Grail – Filter Segments",
+      "description": "Filter-Segment Management for Grail. Slice, dice and contextualize your data to make it easier to find, understand and work with.",
+      "primaryName": "Grail - Filter Segments",
+      "swaggerUrl": "https://wkf10640.apps.dynatrace.com/platform/swagger-ui/index.html?urls.primaryName=Grail+-+Filter+Segments",
+      "host": "wkf10640.apps.dynatrace.com"
+    },
+    {
+      "category": "Grail",
+      "name": "Grail – Resource Store",
+      "description": "The Resource Store API uses the Dynatrace Pattern Language to parse uploaded data and convert it into a tabular storage format.",
+      "primaryName": "Grail - Resource Store",
+      "swaggerUrl": "https://wkf10640.apps.dynatrace.com/platform/swagger-ui/index.html?urls.primaryName=Grail+-+Resource+Store",
+      "host": "wkf10640.apps.dynatrace.com"
+    },
+    {
+      "category": "Grail",
+      "name": "Grail – Storage Management",
+      "description": "This API allows you to manage storage for Grail. Data is organizied in buckets.",
+      "primaryName": "Grail - Storage Management",
+      "swaggerUrl": "https://wkf10640.apps.dynatrace.com/platform/swagger-ui/index.html?urls.primaryName=Grail+-+Storage+Management",
+      "host": "wkf10640.apps.dynatrace.com"
+    },
+    {
+      "category": "Grail",
+      "name": "Grail – Storage Record Deletion",
+      "description": "The record deletion API is primarily designed to help users remove selected records containing sensitive data.",
+      "primaryName": "Grail - Storage Record Deletion",
+      "swaggerUrl": "https://wkf10640.apps.dynatrace.com/platform/swagger-ui/index.html?urls.primaryName=Grail+-+Storage+Record+Deletion",
+      "host": "wkf10640.apps.dynatrace.com"
+    },
+    {
+      "category": "Hub",
+      "name": "Hub",
+      "description": "The Hub API provides catalog content, such as Dynatrace Apps, Extensions, and Technologies, in the context of the current environment.",
+      "primaryName": "Hub",
+      "swaggerUrl": "https://wkf10640.apps.dynatrace.com/platform/swagger-ui/index.html?urls.primaryName=Hub",
+      "host": "wkf10640.apps.dynatrace.com"
+    },
+    {
+      "category": "Identity and Access Management",
+      "name": "Identity and Access Management",
+      "description": "Identity and Access Management configuration. Allows viewing users within the platform and their access capabilities.",
+      "primaryName": "Identity and Access Management",
+      "swaggerUrl": "https://wkf10640.apps.dynatrace.com/platform/swagger-ui/index.html?urls.primaryName=Identity+and+Access+Management",
+      "host": "wkf10640.apps.dynatrace.com"
+    },
+    {
+      "category": "Notification",
+      "name": "Notification v1",
+      "description": "Manage self notifications with the Notification Service API. This is deprecated, use event notifications provided in the Notification Service v2 API instead.",
+      "primaryName": "Notification v1",
+      "swaggerUrl": "https://wkf10640.apps.dynatrace.com/platform/swagger-ui/index.html?urls.primaryName=Notification+v1",
+      "host": "wkf10640.apps.dynatrace.com"
+    },
+    {
+      "category": "Notification",
+      "name": "Notification v2",
+      "description": "Manage resource/event notifications with the Notification Service API.",
+      "primaryName": "Notification v2",
+      "swaggerUrl": "https://wkf10640.apps.dynatrace.com/platform/swagger-ui/index.html?urls.primaryName=Notification+v2",
+      "host": "wkf10640.apps.dynatrace.com"
+    },
+    {
+      "category": "OpenPipeline",
+      "name": "OpenPipeline",
+      "description": "Fetch and update OpenPipeline configurations for different data sources.",
+      "primaryName": "OpenPipeline",
+      "swaggerUrl": "https://wkf10640.apps.dynatrace.com/platform/swagger-ui/index.html?urls.primaryName=OpenPipeline",
+      "host": "wkf10640.apps.dynatrace.com"
+    },
+    {
+      "category": "OpenPipeline",
+      "name": "OpenPipeline – Ingest API",
+      "description": "Ingest generic events to OpenPipeline configurations for different data sources.",
+      "primaryName": "OpenPipeline - Ingest API",
+      "swaggerUrl": "https://wkf10640.live.dynatrace.com/rest-api-doc/index.jsp?urls.primaryName=OpenPipeline%20-%20Ingest%20API",
+      "host": "wkf10640.live.dynatrace.com"
+    },
+    {
+      "category": "Platform management",
+      "name": "Platform Management",
+      "description": "Basic read-only information about the currently logged-in environment.",
+      "primaryName": "Platform Management",
+      "swaggerUrl": "https://wkf10640.apps.dynatrace.com/platform/swagger-ui/index.html?urls.primaryName=Platform+Management",
+      "host": "wkf10640.apps.dynatrace.com"
+    },
+    {
+      "category": "Service-Level Objectives",
+      "name": "Service-Level Objectives",
+      "description": "Management API for service-level objectives, templates and evaluating service-level objectives.",
+      "primaryName": "Service-Level Objectives",
+      "swaggerUrl": "https://wkf10640.apps.dynatrace.com/platform/swagger-ui/index.html?urls.primaryName=Service-Level+Objectives",
+      "host": "wkf10640.apps.dynatrace.com"
+    },
+    {
+      "category": "State service",
+      "name": "State Management",
+      "description": "Provides key-value storage for apps so that app developers can persist and get small chunks of state in the context of their app.",
+      "primaryName": "State Management",
+      "swaggerUrl": "https://wkf10640.apps.dynatrace.com/platform/swagger-ui/index.html?urls.primaryName=State+Management",
+      "host": "wkf10640.apps.dynatrace.com"
+    },
+    {
+      "category": "Vulnerabilities",
+      "name": "Vulnerabilities",
+      "description": "APIs that manage vulnerability related information.",
+      "primaryName": "Vulnerabilities",
+      "swaggerUrl": "https://wkf10640.apps.dynatrace.com/platform/swagger-ui/index.html?urls.primaryName=Vulnerabilities",
+      "host": "wkf10640.apps.dynatrace.com"
+    }
+  ]
+}

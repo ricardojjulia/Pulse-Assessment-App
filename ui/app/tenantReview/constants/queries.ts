@@ -16,14 +16,14 @@ export const DQL_QUERIES = {
   // Data Storage & Grail
   logVolumeByLevel:
     "fetch logs, from:now()-24h | summarize logCount = count(), by:{loglevel} | sort logCount desc | limit 20",
-  eventCount: "fetch events, from:now()-7d | summarize count()",
+  eventCount: "fetch events, from:now()-30d | summarize count()",
   grailBuckets: "fetch dt.system.buckets | fieldsKeep name, records, retention_days",
 
   // Alerting
   recentProblems:
-    "fetch events, from:now()-7d | filter event.kind == \"DAVIS_PROBLEM\" | summarize count()",
+    "fetch events, from:now()-30d | filter event.kind == \"DAVIS_PROBLEM\" | summarize count()",
   problemsByStatus:
-    "fetch events, from:now()-7d | filter event.kind == \"DAVIS_PROBLEM\" | summarize count(), by:{event.status}",
+    "fetch events, from:now()-30d | filter event.kind == \"DAVIS_PROBLEM\" | summarize count(), by:{event.status}",
 
   // Synthetic
   syntheticTestCount: "fetch dt.entity.synthetic_test | summarize count()",
@@ -51,9 +51,9 @@ export const DQL_QUERIES = {
 
   // Business Events (key Gen3/Grail adoption signal)
   bizEventVolume:
-    "fetch bizevents, from:now()-24h | summarize total = count()",
+    "fetch bizevents, from:now()-30d | summarize total = count()",
   bizEventsByType:
-    "fetch bizevents, from:now()-24h | summarize eventCount = count(), by:{event.type} | sort eventCount desc | limit 20",
+    "fetch bizevents, from:now()-30d | summarize eventCount = count(), by:{event.type} | sort eventCount desc | limit 20",
 
   // Audit Logs (audit events live in dt.system.events with event.kind == "AUDIT_EVENT")
   auditLogVolume:
@@ -63,9 +63,9 @@ export const DQL_QUERIES = {
 
   // Synthetic on Grail (Gen3 synthetic execution data)
   syntheticGrailEvents:
-    "fetch dt.synthetic.events, from:now()-7d | summarize total = count()",
+    "fetch dt.synthetic.events, from:now()-30d | summarize total = count()",
   syntheticGrailByType:
-    "fetch dt.synthetic.events, from:now()-7d | summarize eventCount = count(), by:{event.type} | sort eventCount desc | limit 10",
+    "fetch dt.synthetic.events, from:now()-30d | summarize eventCount = count(), by:{event.type} | sort eventCount desc | limit 10",
 
   // Kubernetes
   k8sClusterCount:
@@ -77,11 +77,11 @@ export const DQL_QUERIES = {
 
   // OpenTelemetry Traces (Gen3 distributed tracing in Grail)
   spanCount:
-    "fetch spans, from:now()-24h | summarize total = count()",
+    "fetch spans, from:now()-30d | summarize total = count()",
 
   // Davis Events flowing to Grail (Gen3 alerting path active)
   davisEvents:
-    "fetch events, from:now()-7d | filter event.kind == \"DAVIS_EVENT\" | summarize total = count()",
+    "fetch events, from:now()-30d | filter event.kind == \"DAVIS_EVENT\" | summarize total = count()",
 
   // --- Tier 1 Inventory queries (from reference dashboards + original tenant review) ---
 
@@ -190,21 +190,24 @@ export const DQL_QUERIES = {
 
   // Best Practices — workflow & automation
   workflowExecutionHealth:
-    "fetch events, from:now()-7d | filter event.type == \"automation.workflow.execution\" | summarize total = count(), success = countIf(success == true) | fieldsAdd successRate = if(total > 0, success * 100.0 / total, else: 0.0)",
+    "fetch events, from:now()-30d | filter event.type == \"automation.workflow.execution\" | summarize total = count(), success = countIf(success == true) | fieldsAdd successRate = if(total > 0, success * 100.0 / total, else: 0.0)",
   deploymentEvents:
-    "fetch events, from:now()-7d | filter event.type == \"CUSTOM_DEPLOYMENT\" | summarize total = count()",
+    "fetch events, from:now()-30d | filter event.type == \"CUSTOM_DEPLOYMENT\" | summarize total = count()",
 
   // Best Practices — data quality
   bizeventsDataQuality:
-    "fetch bizevents, from:now()-24h | summarize total = count(), withType = countIf(isNotNull(event.type)), withProvider = countIf(isNotNull(event.provider))",
+    "fetch bizevents, from:now()-30d | summarize total = count(), withType = countIf(isNotNull(event.type)), withProvider = countIf(isNotNull(event.provider))",
   spanDataQuality:
-    "fetch spans, from:now()-24h | summarize total = count(), withDbSystem = countIf(isNotNull(db.system)), withServiceName = countIf(isNotNull(service.name))",
+    "fetch spans, from:now()-30d | summarize total = count(), withDbSystem = countIf(isNotNull(db.system)), withServiceName = countIf(isNotNull(service.name))",
   debugLogVolume:
     "fetch logs, from:now()-24h | summarize total = count(), debugCount = countIf(loglevel == \"DEBUG\" OR loglevel == \"TRACE\")",
 
   // Best Practices — synthetic
   syntheticMonitorDetails:
     "fetch dt.entity.synthetic_test | fieldsAdd entity.name, type | summarize testCount = count(), by:{type}",
+
+  rumEventVolume:
+    "fetch user.events, from:now()-30d | summarize total = count()",
 
   // Best Practices — RUM web vitals
   webVitals:

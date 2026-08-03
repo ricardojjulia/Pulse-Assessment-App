@@ -243,10 +243,10 @@ export const Home: React.FC = () => {
         </Flex>
 
         <Flex flexDirection="column" alignItems="center" gap={8}>
-          <Button onClick={() => navigate("/")} size="condensed">
+          <Button onClick={() => navigate("/")} variant="emphasized" color="primary">
             Run Assessment
           </Button>
-          <Button color="primary" variant="emphasized" size="condensed">
+          <Button onClick={() => navigate(tenantReviewPath("/app-rubrics"))} color="primary" variant="emphasized">
             Tenant Review
           </Button>
         </Flex>

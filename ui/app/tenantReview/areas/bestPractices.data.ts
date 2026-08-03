@@ -2,11 +2,8 @@
  * Best Practices review data hook.
  *
  * Evaluates tenant configuration against best practices derived from
- * the USFOODS Module A workshop series (A.00–A.06). The 15 categories
- * cover platform governance, infrastructure, data management, security,
- * and operational maturity.
- *
- * Initially USFOODS-specific; a generalized variant is planned.
+ * curated Dynatrace best-practice material. The categories cover platform
+ * governance, infrastructure, data management, security, and operational maturity.
  */
 import { useState, useEffect, useRef } from "react";
 import { useDql } from "@dynatrace-sdk/react-hooks";
@@ -59,7 +56,7 @@ export function useBestPracticesReview(): BestPracticesResult {
     isLoading: true,
   });
 
-  // DQL queries — original 15 categories
+  // DQL queries — foundational categories
   const hostsByMode = useDql(DQL_QUERIES.hostsByMonitoringMode);
   const hostsByVersion = useDql(DQL_QUERIES.hostsByAgentVersion);
   const hostsByHostGroup = useDql(DQL_QUERIES.hostsByHostGroup);
@@ -81,9 +78,11 @@ export function useBestPracticesReview(): BestPracticesResult {
   const spanQuality = useDql(DQL_QUERIES.spanDataQuality);
   const debugLogVolume = useDql(DQL_QUERIES.debugLogVolume);
   const syntheticDetails = useDql(DQL_QUERIES.syntheticMonitorDetails);
+  const syntheticGrailEvents = useDql(DQL_QUERIES.syntheticGrailEvents);
   const spanCount = useDql(DQL_QUERIES.spanCount);
   const bizEventVolume = useDql(DQL_QUERIES.bizEventVolume);
   const applicationCount = useDql(DQL_QUERIES.applicationCount);
+  const rumEventVolume = useDql(DQL_QUERIES.rumEventVolume);
 
   // DQL queries — reference dashboard coverage gaps
   const serviceMethodCount = useDql(DQL_QUERIES.serviceMethodCount);
@@ -100,6 +99,7 @@ export function useBestPracticesReview(): BestPracticesResult {
       workflowCount, sloCount, awsCount, openPipelineIngest, hostCount,
       workflowExecHealth, deploymentEvents, bizeventsQuality, spanQuality,
       debugLogVolume, syntheticDetails, spanCount, bizEventVolume, applicationCount,
+      syntheticGrailEvents, rumEventVolume,
       serviceMethodCount, customServiceCount, hostsWithoutHostGroup,
     ];
     if (allDql.some((q) => q.isLoading || q.isPending)) return;
@@ -218,11 +218,9 @@ export function useBestPracticesReview(): BestPracticesResult {
             });
           }
 
-          // Check: AWS integration
-          total++;
+          // Informational: AWS integration is only required for AWS-hosted tenants.
           const awsCredentials = dqlNumber(awsCount.data);
           if (awsCredentials > 0) {
-            passed++;
             findings.push({
               id: "bp-arch-aws",
               title: `${awsCredentials} AWS integration(s) configured`,
@@ -234,7 +232,7 @@ export function useBestPracticesReview(): BestPracticesResult {
             findings.push({
               id: "bp-arch-no-aws",
               title: "No AWS integration detected",
-              description: "No AWS credentials entity found. If running on AWS, deploy via CloudFormation for full integration.",
+              description: "No AWS credentials entity found. This is informational unless the tenant monitors AWS-hosted workloads.",
               severity: "info",
               recommendation: "Deploy AWS integration via CloudFormation stack for IAM role, Firehose, and EventBridge rules.",
             });
@@ -278,31 +276,39 @@ export function useBestPracticesReview(): BestPracticesResult {
           let passed = 0;
           let total = 0;
 
-          // Check: Host groups configured (indicates DynaKube hostGroup is set)
-          total++;
           const hostGroupRows = dqlRows(hostsByHostGroup.data);
           const hostsWithGroup = hostGroupRows.filter((r) => r["dt.host_group.id"] && String(r["dt.host_group.id"]) !== "");
-          if (hostsWithGroup.length > 0) {
-            passed++;
+          if (totalHosts === 0) {
             findings.push({
-              id: "bp-dk-hostgroup",
-              title: `Host group(s) configured: ${hostsWithGroup.map((r) => r["dt.host_group.id"]).join(", ")}`,
-              description: "Hosts are assigned to host groups, indicating DynaKube hostGroup configuration.",
-              severity: "success",
-              recommendation: "Use convention: <org>-<cluster>-<environment> (e.g., moxe-eks-production).",
+              id: "bp-dk-no-hosts",
+              title: "No hosts detected for DynaKube host group evaluation",
+              description: "Host group coverage cannot be evaluated until monitored hosts are present.",
+              severity: "info",
+              recommendation: "After onboarding hosts, verify DynaKube sets spec.oneAgent.cloudNativeFullStack.hostGroup.",
             });
           } else {
-            findings.push({
-              id: "bp-dk-no-hostgroup",
-              title: "No host groups configured",
-              description: "No hosts are assigned to host groups. DynaKube CR should set spec.oneAgent.cloudNativeFullStack.hostGroup.",
-              severity: "warning",
-              recommendation: "Set hostGroup in DynaKube CR for proper host organization.",
-            });
-          }
+            // Check: Host groups configured (indicates DynaKube hostGroup is set)
+            total++;
+            if (hostsWithGroup.length > 0) {
+              passed++;
+              findings.push({
+                id: "bp-dk-hostgroup",
+                title: `Host group(s) configured: ${hostsWithGroup.map((r) => r["dt.host_group.id"]).join(", ")}`,
+                description: "Hosts are assigned to host groups, indicating DynaKube hostGroup configuration.",
+                severity: "success",
+                recommendation: "Use convention: <org>-<cluster>-<environment> (e.g., moxe-eks-production).",
+              });
+            } else {
+              findings.push({
+                id: "bp-dk-no-hostgroup",
+                title: "No host groups configured",
+                description: "No hosts are assigned to host groups. DynaKube CR should set spec.oneAgent.cloudNativeFullStack.hostGroup.",
+                severity: "warning",
+                recommendation: "Set hostGroup in DynaKube CR for proper host organization.",
+              });
+            }
 
-          // Check: Host group coverage percentage
-          if (totalHosts > 0) {
+            // Check: Host group coverage percentage
             total++;
             const hostsNoGroup = dqlNumber(hostsWithoutHostGroup.data);
             const coveragePct = Math.round(((totalHosts - hostsNoGroup) / totalHosts) * 100);
@@ -335,7 +341,9 @@ export function useBestPracticesReview(): BestPracticesResult {
             recommendation: "Verify DynaKube CR settings via kubectl: injection policy, namespace selectors, tolerations, resource sizing.",
           });
 
-          allChecks.push({ name: "DynaKube Configuration", weight: 0.05, result: passed === total ? "pass" : passed > 0 ? "partial" : "fail", partialValue: total > 0 ? passed / total : 0 });
+          if (total > 0) {
+            allChecks.push({ name: "DynaKube Configuration", weight: 0.05, result: passed === total ? "pass" : passed > 0 ? "partial" : "fail", partialValue: passed / total });
+          }
           categories.push({ id: "dynakube-config", name: "2. DynaKube Configuration & Feature Flags", description: "Host groups, feature flags, resource sizing", findings, passedChecks: passed, totalChecks: total });
         }
 
@@ -347,39 +355,41 @@ export function useBestPracticesReview(): BestPracticesResult {
           let passed = 0;
           let total = 0;
 
-          // Check: At least 2 ActiveGates for HA
-          total++;
           const agCount = dqlNumber(activeGateCount.data, "agCount");
-          if (agCount >= 2) {
-            passed++;
-            findings.push({
-              id: "bp-ag-ha",
-              title: `${agCount} ActiveGate(s) detected — HA configuration`,
-              description: "Multiple ActiveGates provide high availability and load distribution.",
-              severity: "success",
-              recommendation: "Ensure AGs are spread across availability zones with topologySpreadConstraints.",
-            });
-          } else if (agCount === 1) {
-            findings.push({
-              id: "bp-ag-single",
-              title: "Only 1 ActiveGate detected — no HA",
-              description: "A single ActiveGate creates a single point of failure. Best practice: 2+ replicas for 11-30 node clusters.",
-              severity: "warning",
-              recommendation: "Increase ActiveGate replicas to at least 2 for high availability.",
-            });
-          } else {
+          if (agCount === 0) {
             findings.push({
               id: "bp-ag-none",
               title: "No ActiveGates detected via SFM metrics",
-              description: "No ActiveGate CPU metrics found. ActiveGates may not be reporting or the metric is not available.",
+              description: "No ActiveGate CPU metrics found. This is informational unless the tenant uses Kubernetes monitoring, routing, extensions, private synthetic, or remote environments.",
               severity: "info",
               recommendation: "Deploy at least 2 ActiveGates with capabilities: kubernetes-monitoring, routing, metrics-ingest.",
             });
+          } else {
+            // Check: At least 2 ActiveGates for HA when ActiveGates are in use.
+            total++;
+            if (agCount >= 2) {
+              passed++;
+              findings.push({
+                id: "bp-ag-ha",
+                title: `${agCount} ActiveGate(s) detected — HA configuration`,
+                description: "Multiple ActiveGates provide high availability and load distribution.",
+                severity: "success",
+                recommendation: "Ensure AGs are spread across availability zones with topologySpreadConstraints.",
+              });
+            } else {
+              findings.push({
+                id: "bp-ag-single",
+                title: "Only 1 ActiveGate detected — no HA",
+                description: "A single ActiveGate creates a single point of failure. Best practice: 2+ replicas for production ActiveGate-backed capabilities.",
+                severity: "warning",
+                recommendation: "Increase ActiveGate replicas to at least 2 for high availability.",
+              });
+            }
           }
 
           // Check: AG to host ratio
-          total++;
           if (agCount > 0 && totalHosts > 0) {
+            total++;
             const ratio = totalHosts / agCount;
             if (ratio <= 15) {
               passed++;
@@ -399,11 +409,11 @@ export function useBestPracticesReview(): BestPracticesResult {
                 recommendation: "Scale to 2-3 AGs for 31-50 nodes, 3+ for 50+ nodes. Add 1 replica per ~1,000 pods.",
               });
             }
-          } else {
-            passed++; // Skip if no data
           }
 
-          allChecks.push({ name: "ActiveGate Sizing", weight: 0.07, result: passed === total ? "pass" : passed > 0 ? "partial" : "fail", partialValue: total > 0 ? passed / total : 0 });
+          if (total > 0) {
+            allChecks.push({ name: "ActiveGate Sizing", weight: 0.07, result: passed === total ? "pass" : passed > 0 ? "partial" : "fail", partialValue: passed / total });
+          }
           categories.push({ id: "activegate-sizing", name: "3. ActiveGate Sizing & Capabilities", description: "Replica count, HA, scaling thresholds", findings, passedChecks: passed, totalChecks: total });
         }
 
@@ -415,41 +425,53 @@ export function useBestPracticesReview(): BestPracticesResult {
           let passed = 0;
           let total = 0;
 
-          // Check: Network zones configured
-          total++;
           const nzCount = simpleCount(SETTINGS_SCHEMAS.networkZones);
           const nzRows = dqlRows(networkZoneAssignments.data);
           const hostsInDefault = nzRows.filter((r) => !r["networkZone"] || String(r["networkZone"]) === "default");
           const defaultCount = hostsInDefault.reduce((s, r) => s + Number(r["hostCount"] ?? 0), 0);
 
-          if (nzCount > 0 && nzRows.length > 1) {
-            passed++;
+          if (totalHosts === 0) {
             findings.push({
-              id: "bp-nz-configured",
-              title: `${nzCount} network zone(s) configured with ${nzRows.length} assignment group(s)`,
-              description: "Network zones are configured for traffic routing and failover.",
-              severity: "success",
-              recommendation: "Use naming convention: <org>.<cluster>.<environment>. Never reuse zone names across environments.",
-            });
-          } else if (nzCount > 0) {
-            findings.push({
-              id: "bp-nz-partial",
-              title: `${nzCount} network zone(s) configured but limited host assignment diversity`,
-              description: defaultCount > 0 ? `${defaultCount} host(s) remain in the default zone.` : "Network zones exist but host assignment may not be fully configured.",
-              severity: "warning",
-              recommendation: "Assign all hosts to named network zones. Set spec.networkZone in DynaKube CR.",
+              id: "bp-nz-no-hosts",
+              title: "No hosts detected for network zone evaluation",
+              description: "Network zone host assignment cannot be evaluated until monitored hosts are present.",
+              severity: "info",
+              recommendation: "After onboarding hosts, assign agents and ActiveGates to named network zones by cluster or environment.",
             });
           } else {
-            findings.push({
-              id: "bp-nz-none",
-              title: "No custom network zones configured",
-              description: "All agents are using the default zone. This mixes traffic across clusters and prevents proper failover routing.",
-              severity: "warning",
-              recommendation: "Create named network zones per cluster/environment. Set networkZone in every DynaKube CR.",
-            });
+            // Check: Network zones configured
+            total++;
+            if (nzCount > 0 && nzRows.length > 1) {
+              passed++;
+              findings.push({
+                id: "bp-nz-configured",
+                title: `${nzCount} network zone(s) configured with ${nzRows.length} assignment group(s)`,
+                description: "Network zones are configured for traffic routing and failover.",
+                severity: "success",
+                recommendation: "Use naming convention: <org>.<cluster>.<environment>. Never reuse zone names across environments.",
+              });
+            } else if (nzCount > 0) {
+              findings.push({
+                id: "bp-nz-partial",
+                title: `${nzCount} network zone(s) configured but limited host assignment diversity`,
+                description: defaultCount > 0 ? `${defaultCount} host(s) remain in the default zone.` : "Network zones exist but host assignment may not be fully configured.",
+                severity: "warning",
+                recommendation: "Assign all hosts to named network zones. Set spec.networkZone in DynaKube CR.",
+              });
+            } else {
+              findings.push({
+                id: "bp-nz-none",
+                title: "No custom network zones configured",
+                description: "All agents are using the default zone. This mixes traffic across clusters and prevents proper failover routing.",
+                severity: "warning",
+                recommendation: "Create named network zones per cluster/environment. Set networkZone in every DynaKube CR.",
+              });
+            }
           }
 
-          allChecks.push({ name: "Network Zones", weight: 0.05, result: passed === total ? "pass" : "fail", partialValue: passed / Math.max(total, 1) });
+          if (total > 0) {
+            allChecks.push({ name: "Network Zones", weight: 0.05, result: passed === total ? "pass" : "fail", partialValue: passed / total });
+          }
           categories.push({ id: "network-zones", name: "4. Network Zones & Routing", description: "Zone configuration, failover routing", findings, passedChecks: passed, totalChecks: total });
         }
 
@@ -803,9 +825,6 @@ export function useBestPracticesReview(): BestPracticesResult {
         // ──────────────────────────────────────────────
         {
           const findings: Finding[] = [];
-          const total = 0;
-          const passed = 0;
-
           // IAM configuration is not queryable from app APIs
           findings.push({
             id: "bp-iam-info",
@@ -823,8 +842,7 @@ export function useBestPracticesReview(): BestPracticesResult {
             recommendation: "Review quarterly: verify role mappings match current team structure.",
           });
 
-          allChecks.push({ name: "IAM Policies", weight: 0.05, result: "partial", partialValue: 0.5 });
-          categories.push({ id: "iam-policies", name: "10. IAM Policies & Access Control", description: "Groups, policies, boundaries — manual verification required", findings, passedChecks: passed, totalChecks: Math.max(total, 1) });
+          categories.push({ id: "iam-policies", name: "10. IAM Policies & Access Control", description: "Groups, policies, boundaries — manual verification required", findings, passedChecks: 0, totalChecks: 0 });
         }
 
         // ──────────────────────────────────────────────
@@ -832,42 +850,15 @@ export function useBestPracticesReview(): BestPracticesResult {
         // ──────────────────────────────────────────────
         {
           const findings: Finding[] = [];
-          let passed = 0;
-          let total = 0;
-
-          // Check: SLOs exist (maturity signal for tokens/governance)
-          total++;
-          const slos = dqlNumber(sloCount.data);
-          if (slos > 0) {
-            passed++;
-            findings.push({
-              id: "bp-token-slos",
-              title: `${slos} SLO(s) configured — operational maturity`,
-              description: "SLOs indicate structured reliability management which often correlates with good token governance.",
-              severity: "success",
-              recommendation: "Define SLOs for critical services with environment-specific targets: 99.5% (prod), 99.0% (staging), 95.0% (dev).",
-            });
-          } else {
-            findings.push({
-              id: "bp-token-no-slos",
-              title: "No SLOs configured",
-              description: "SLOs are a key maturity indicator. Define availability and latency SLOs for critical services.",
-              severity: "warning",
-              recommendation: "Create SLOs: checkout availability (99.5% prod), checkout latency P95 (95% prod) on rolling week windows.",
-            });
-          }
-
-          // Informational: Token governance
           findings.push({
             id: "bp-token-info",
-            title: "Token governance best practices (manual verification)",
+            title: "Token governance requires manual verification",
             description: "Verify: (1) Use OAuth2 clients for all new integrations, (2) One client per integration, (3) Least-privilege scopes, (4) Dedicated service users, (5) Secrets in AWS Secrets Manager/Vault, (6) Expiry dates on all tokens, (7) Monthly token inventory audit.",
             severity: "info",
             recommendation: "Prefer OAuth2 over classic access tokens. Set expiry dates, rotate every 90 days minimum, revoke unused tokens monthly.",
           });
 
-          allChecks.push({ name: "API Tokens & OAuth", weight: 0.06, result: passed === total ? "pass" : passed > 0 ? "partial" : "fail", partialValue: total > 0 ? passed / total : 0 });
-          categories.push({ id: "tokens-oauth", name: "11. API Tokens, OAuth & Security", description: "OAuth adoption, token governance, secret management", findings, passedChecks: passed, totalChecks: total });
+          categories.push({ id: "tokens-oauth", name: "11. API Tokens, OAuth & Security", description: "OAuth adoption, token governance, secret management — manual verification required", findings, passedChecks: 0, totalChecks: 0 });
         }
 
         // ──────────────────────────────────────────────
@@ -892,8 +883,7 @@ export function useBestPracticesReview(): BestPracticesResult {
             recommendation: "Block merge on terraform plan failure in CI. Use environment-specific .tfvars for dev/staging/production.",
           });
 
-          allChecks.push({ name: "Terraform & CaC", weight: 0.03, result: "partial", partialValue: 0.5 });
-          categories.push({ id: "terraform-config", name: "12. Terraform & Configuration-as-Code", description: "CaC tooling, provider config, CI/CD — manual verification", findings, passedChecks: 0, totalChecks: 1 });
+          categories.push({ id: "terraform-config", name: "12. Terraform & Configuration-as-Code", description: "CaC tooling, provider config, CI/CD — manual verification", findings, passedChecks: 0, totalChecks: 0 });
         }
 
         // ──────────────────────────────────────────────
@@ -918,8 +908,7 @@ export function useBestPracticesReview(): BestPracticesResult {
             recommendation: "If it is in Git, Git wins — manual UI changes get overwritten. Use git revert for rollback, not manual edits.",
           });
 
-          allChecks.push({ name: "ArgoCD & GitOps", weight: 0.03, result: "partial", partialValue: 0.5 });
-          categories.push({ id: "argocd-gitops", name: "13. ArgoCD & GitOps Patterns", description: "GitOps workflow, ArgoCD config, ESO — manual verification", findings, passedChecks: 0, totalChecks: 1 });
+          categories.push({ id: "argocd-gitops", name: "13. ArgoCD & GitOps Patterns", description: "GitOps workflow, ArgoCD config, ESO — manual verification", findings, passedChecks: 0, totalChecks: 0 });
         }
 
         // ──────────────────────────────────────────────
@@ -1152,7 +1141,7 @@ export function useBestPracticesReview(): BestPracticesResult {
             passed++;
             findings.push({
               id: "bp-wf-health",
-              title: `Workflow success rate: ${wfSuccessRate.toFixed(1)}% (${wfTotal} executions/7d)`,
+              title: `Workflow success rate: ${wfSuccessRate.toFixed(1)}% (${wfTotal} executions/30d)`,
               description: "Workflow execution success rate is above 95% threshold.",
               severity: "success",
               recommendation: "Continue monitoring. Set up alerts for workflow failure rate spikes.",
@@ -1160,7 +1149,7 @@ export function useBestPracticesReview(): BestPracticesResult {
           } else if (wfTotal > 0) {
             findings.push({
               id: "bp-wf-health-low",
-              title: `Workflow success rate: ${wfSuccessRate.toFixed(1)}% (${wfTotal} executions/7d) — below 95% target`,
+              title: `Workflow success rate: ${wfSuccessRate.toFixed(1)}% (${wfTotal} executions/30d) — below 95% target`,
               description: "Workflow success rate is below the recommended 95% threshold. Investigate failing workflows.",
               severity: "warning",
               recommendation: "Review failing workflows. Ensure HTTP calls have 10s timeout, DQL queries have 30s timeout, and external calls have try-catch error handling.",
@@ -1168,7 +1157,7 @@ export function useBestPracticesReview(): BestPracticesResult {
           } else {
             findings.push({
               id: "bp-wf-no-executions",
-              title: "No workflow executions in last 7 days",
+              title: "No workflow executions in last 30 days",
               description: "No AutomationEngine workflow executions detected. Workflows are the Gen3 replacement for notification integrations.",
               severity: "info",
               recommendation: "Create workflows for: alert routing (Davis Problem trigger), health monitoring (scheduled), and remediation (with approval gates).",
@@ -1182,7 +1171,7 @@ export function useBestPracticesReview(): BestPracticesResult {
             passed++;
             findings.push({
               id: "bp-wf-deploy-events",
-              title: `${deployCount} deployment event(s) in last 7 days — CI/CD integrated`,
+              title: `${deployCount} deployment event(s) in last 30 days — CI/CD integrated`,
               description: "Deployment events are flowing, indicating CI/CD pipeline integration with Dynatrace.",
               severity: "success",
               recommendation: "Ensure all production deployments send events. Use deployment markers for Davis AI correlation.",
@@ -1190,7 +1179,7 @@ export function useBestPracticesReview(): BestPracticesResult {
           } else {
             findings.push({
               id: "bp-wf-no-deploy",
-              title: "No deployment events detected (last 7d)",
+              title: "No deployment events detected (last 30d)",
               description: "No CUSTOM_DEPLOYMENT events found. Deployment events enable Davis AI to correlate problems with releases.",
               severity: "warning",
               recommendation: "Send deployment events from CI/CD pipeline via Events API v2. This enables release-aware problem correlation.",
@@ -1216,7 +1205,7 @@ export function useBestPracticesReview(): BestPracticesResult {
             passed++;
             findings.push({
               id: "bp-span-flowing",
-              title: `${spans.toLocaleString()} spans in Grail (last 24h) — distributed tracing active`,
+              title: `${spans.toLocaleString()} spans in Grail (last 30d) — distributed tracing active`,
               description: "Spans are flowing to Grail, enabling distributed trace analysis and service dependency mapping.",
               severity: "success",
               recommendation: "Ensure all critical services are instrumented. Drop health check spans at ingestion via OpenPipeline to reduce volume.",
@@ -1224,19 +1213,19 @@ export function useBestPracticesReview(): BestPracticesResult {
           } else {
             findings.push({
               id: "bp-span-none",
-              title: "No spans detected in Grail (last 24h)",
+              title: "No spans detected in Grail (last 30d)",
               description: "No distributed tracing data found. Spans are critical for service dependency analysis and root cause investigation.",
               severity: "warning",
               recommendation: "Enable distributed tracing via OneAgent auto-instrumentation or OpenTelemetry SDK. Verify storage:spans:read scope.",
             });
           }
 
-          // Check: Span data quality
-          total++;
           const sqRow = dqlRows(spanQuality.data)[0] ?? {};
           const sqTotal = Number(sqRow["total"] ?? 0);
           const sqWithService = Number(sqRow["withServiceName"] ?? 0);
           if (sqTotal > 0) {
+            // Check: Span data quality
+            total++;
             const serviceRate = (sqWithService / sqTotal * 100);
             if (serviceRate >= 95) {
               passed++;
@@ -1277,7 +1266,7 @@ export function useBestPracticesReview(): BestPracticesResult {
             passed++;
             findings.push({
               id: "bp-biz-flowing",
-              title: `${bizeventTotal.toLocaleString()} business events (last 24h) — BizOps active`,
+              title: `${bizeventTotal.toLocaleString()} business events (last 30d) — BizOps active`,
               description: "Business events are flowing to Grail, enabling revenue tracking, funnel analysis, and business KPIs.",
               severity: "success",
               recommendation: "Ensure all events have event.type and event.provider populated. Use reverse-domain naming for event types.",
@@ -1285,20 +1274,20 @@ export function useBestPracticesReview(): BestPracticesResult {
           } else {
             findings.push({
               id: "bp-biz-none",
-              title: "No business events detected (last 24h)",
+              title: "No business events detected (last 30d)",
               description: "Business events enable revenue tracking, conversion funnel analysis, and business KPI monitoring.",
               severity: "info",
               recommendation: "Instrument business events for critical transactions: purchases, signups, cart additions. Use the Business Events API or OneAgent auto-capture.",
             });
           }
 
-          // Check: Bizevent data quality
-          total++;
           const bqRow = dqlRows(bizeventsQuality.data)[0] ?? {};
           const bqTotal = Number(bqRow["total"] ?? 0);
           const bqWithType = Number(bqRow["withType"] ?? 0);
           const bqWithProvider = Number(bqRow["withProvider"] ?? 0);
           if (bqTotal > 0) {
+            // Check: Bizevent data quality
+            total++;
             const typeRate = (bqWithType / bqTotal * 100);
             const providerRate = (bqWithProvider / bqTotal * 100);
             if (typeRate >= 99 && providerRate >= 99) {
@@ -1321,26 +1310,28 @@ export function useBestPracticesReview(): BestPracticesResult {
             }
           }
 
-          // Check: Business events security context rules
-          total++;
-          const bizSecRules = simpleCount(SETTINGS_SCHEMAS.bizeventsSecurityContextRules);
-          if (bizSecRules > 0) {
-            passed++;
-            findings.push({
-              id: "bp-biz-sec-context",
-              title: `${bizSecRules} business event security context rule(s) configured`,
-              description: "Security context rules control access to business events at the record level.",
-              severity: "success",
-              recommendation: "Ensure security context rules cover PCI-regulated and sensitive business events.",
-            });
-          } else if (bizeventTotal > 0) {
-            findings.push({
-              id: "bp-biz-no-sec-context",
-              title: "No business event security context rules",
-              description: "Business events are flowing but no security context rules are configured. This means all users with bucket access can see all events.",
-              severity: "warning",
-              recommendation: "Configure builtin:bizevents-security-context-rules for sensitive business events (payment, PII).",
-            });
+          if (bizeventTotal > 0) {
+            // Check: Business events security context rules
+            total++;
+            const bizSecRules = simpleCount(SETTINGS_SCHEMAS.bizeventsSecurityContextRules);
+            if (bizSecRules > 0) {
+              passed++;
+              findings.push({
+                id: "bp-biz-sec-context",
+                title: `${bizSecRules} business event security context rule(s) configured`,
+                description: "Security context rules control access to business events at the record level.",
+                severity: "success",
+                recommendation: "Ensure security context rules cover PCI-regulated and sensitive business events.",
+              });
+            } else {
+              findings.push({
+                id: "bp-biz-no-sec-context",
+                title: "No business event security context rules",
+                description: "Business events are flowing but no security context rules are configured. This means all users with bucket access can see all events.",
+                severity: "warning",
+                recommendation: "Configure builtin:bizevents-security-context-rules for sensitive business events (payment, PII).",
+              });
+            }
           }
 
           allChecks.push({ name: "Business Events", weight: 0.05, result: passed === total ? "pass" : passed > 0 ? "partial" : "fail", partialValue: total > 0 ? passed / total : 0 });
@@ -1355,12 +1346,12 @@ export function useBestPracticesReview(): BestPracticesResult {
           let passed = 0;
           let total = 0;
 
-          // Check: DEBUG/TRACE log filtering
-          total++;
           const dlRow = dqlRows(debugLogVolume.data)[0] ?? {};
           const dlTotal = Number(dlRow["total"] ?? 0);
           const dlDebug = Number(dlRow["debugCount"] ?? 0);
           if (dlTotal > 0) {
+            // Check: DEBUG/TRACE log filtering
+            total++;
             const debugPct = (dlDebug / dlTotal * 100);
             if (debugPct < 5) {
               passed++;
@@ -1380,9 +1371,19 @@ export function useBestPracticesReview(): BestPracticesResult {
                 recommendation: "Configure OpenPipeline to drop DEBUG/TRACE logs in production. This can save 15-30% of log storage costs.",
               });
             }
+          } else {
+            findings.push({
+              id: "bp-log-no-volume",
+              title: "No log volume detected in last 24h",
+              description: "DEBUG/TRACE filtering cannot be evaluated without recent log data.",
+              severity: "info",
+              recommendation: "After log ingestion is active, keep DEBUG/TRACE below 5% of production log volume.",
+            });
           }
 
-          allChecks.push({ name: "Log Processing", weight: 0.05, result: passed === total ? "pass" : passed > 0 ? "partial" : "fail", partialValue: total > 0 ? passed / total : 0 });
+          if (total > 0) {
+            allChecks.push({ name: "Log Processing", weight: 0.05, result: passed === total ? "pass" : passed > 0 ? "partial" : "fail", partialValue: passed / total });
+          }
           categories.push({ id: "log-processing", name: "19. Log Processing & Filtering", description: "Debug filtering, PII masking, volume optimization", findings, passedChecks: passed, totalChecks: total });
         }
 
@@ -1418,6 +1419,30 @@ export function useBestPracticesReview(): BestPracticesResult {
             });
           }
 
+          // Check: Synthetic monitors are producing execution data recently
+          if (synthTotal > 0) {
+            total++;
+            const synthEvents = dqlNumber(syntheticGrailEvents.data, "total");
+            if (synthEvents > 0) {
+              passed++;
+              findings.push({
+                id: "bp-synth-executions",
+                title: `${synthEvents.toLocaleString()} synthetic execution event(s) in last 30 days`,
+                description: "Synthetic monitors are actively producing Grail execution data for DQL analysis and dashboarding.",
+                severity: "success",
+                recommendation: "Review execution failure trends and location coverage monthly.",
+              });
+            } else {
+              findings.push({
+                id: "bp-synth-no-executions",
+                title: "Synthetic monitors configured, but no execution events in last 30 days",
+                description: "Configured monitors are not enough; recent execution data is needed to prove active utilization.",
+                severity: "warning",
+                recommendation: "Verify monitors are enabled, have assigned locations, and publish execution results to Grail.",
+              });
+            }
+          }
+
           allChecks.push({ name: "Synthetic Monitoring", weight: 0.05, result: passed === total ? "pass" : "fail", partialValue: passed / Math.max(total, 1) });
           categories.push({ id: "synthetic-monitoring", name: "20. Synthetic Monitoring", description: "Availability testing, performance checks, SSL monitoring", findings, passedChecks: passed, totalChecks: total });
         }
@@ -1450,6 +1475,30 @@ export function useBestPracticesReview(): BestPracticesResult {
               severity: "info",
               recommendation: "Enable RUM via automatic JavaScript injection. Configure user action naming, session replay (with privacy masking), and Core Web Vitals targets.",
             });
+          }
+
+          // Check: RUM is producing user event data recently
+          if (appCount > 0) {
+            total++;
+            const rumEvents = dqlNumber(rumEventVolume.data, "total");
+            if (rumEvents > 0) {
+              passed++;
+              findings.push({
+                id: "bp-rum-events",
+                title: `${rumEvents.toLocaleString()} RUM user event(s) in last 30 days`,
+                description: "RUM applications are actively receiving user experience data.",
+                severity: "success",
+                recommendation: "Review Core Web Vitals, frontend errors, and user action naming quality for critical applications.",
+              });
+            } else {
+              findings.push({
+                id: "bp-rum-no-events",
+                title: "RUM applications configured, but no user events in last 30 days",
+                description: "Configured RUM apps are not enough; recent user event data is needed to prove active utilization.",
+                severity: "warning",
+                recommendation: "Verify JavaScript injection, beacon delivery, app detection rules, and privacy settings.",
+              });
+            }
           }
 
           allChecks.push({ name: "Real User Monitoring", weight: 0.04, result: passed === total ? "pass" : "fail", partialValue: passed / Math.max(total, 1) });
@@ -1503,9 +1552,11 @@ export function useBestPracticesReview(): BestPracticesResult {
     spanQuality.isLoading, spanQuality.isPending, spanQuality.data, spanQuality.error,
     debugLogVolume.isLoading, debugLogVolume.isPending, debugLogVolume.data, debugLogVolume.error,
     syntheticDetails.isLoading, syntheticDetails.isPending, syntheticDetails.data, syntheticDetails.error,
+    syntheticGrailEvents.isLoading, syntheticGrailEvents.isPending, syntheticGrailEvents.data, syntheticGrailEvents.error,
     spanCount.isLoading, spanCount.isPending, spanCount.data, spanCount.error,
     bizEventVolume.isLoading, bizEventVolume.isPending, bizEventVolume.data, bizEventVolume.error,
     applicationCount.isLoading, applicationCount.isPending, applicationCount.data, applicationCount.error,
+    rumEventVolume.isLoading, rumEventVolume.isPending, rumEventVolume.data, rumEventVolume.error,
     serviceMethodCount.isLoading, serviceMethodCount.isPending, serviceMethodCount.data, serviceMethodCount.error,
     customServiceCount.isLoading, customServiceCount.isPending, customServiceCount.data, customServiceCount.error,
     hostsWithoutHostGroup.isLoading, hostsWithoutHostGroup.isPending, hostsWithoutHostGroup.data, hostsWithoutHostGroup.error,

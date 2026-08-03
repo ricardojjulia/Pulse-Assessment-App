@@ -14,7 +14,7 @@ import { useReviewConfig, getAreaWeight, getGen3Severity } from "../hooks/useRev
  * 1. Grail buckets accessible and configured
  * 2. Custom bucket depth (multiple custom buckets = mature data management)
  * 3. Logs flowing into Grail (last 24h)
- * 4. Events stored in Grail (last 7d)
+ * 4. Events stored in Grail (last 30d)
  * 5. Bucket retention policies configured
  * 6. Business events ingested (key Gen3/Grail adoption signal)
  *
@@ -199,7 +199,7 @@ export function useStorageReview(): ReviewAreaResult {
       } else if (totalBizEvents === 0) {
         findings.push({
           id: "storage-no-bizevents",
-          title: "No business events in Grail (last 24h)",
+          title: "No business events in Grail (last 30d)",
           description: "Business events are a key Gen3/Grail capability for tracking business-relevant actions like purchases, sign-ups, and custom application events.",
           severity: "warning",
           recommendation: "Instrument business events using the OneAgent API, OpenTelemetry, or the Business Events ingest API to unlock business analytics in Grail.",
@@ -207,7 +207,7 @@ export function useStorageReview(): ReviewAreaResult {
       } else {
         findings.push({
           id: "storage-bizevents-volume",
-          title: `${totalBizEvents.toLocaleString()} business events in Grail (last 24h)`,
+          title: `${totalBizEvents.toLocaleString()} business events in Grail (last 30d)`,
           description: "Business events are flowing into Grail, enabling business analytics and BizOps capabilities.",
           severity: getGen3Severity(totalBizEvents, config.businessEvents),
           recommendation: "Review business event types and ensure key business processes are instrumented.",
@@ -236,7 +236,7 @@ export function useStorageReview(): ReviewAreaResult {
       } else if (totalSpans === 0) {
         findings.push({
           id: "storage-no-spans",
-          title: "No OpenTelemetry traces in Grail (last 24h)",
+          title: "No OpenTelemetry traces in Grail (last 30d)",
           description: "No span data is flowing into Grail. OpenTelemetry traces are optional but indicate Gen3 distributed tracing adoption.",
           severity: "info",
           recommendation: "If using distributed tracing, configure OpenTelemetry instrumentation to send spans to Dynatrace Grail.",
@@ -244,7 +244,7 @@ export function useStorageReview(): ReviewAreaResult {
       } else {
         findings.push({
           id: "storage-spans-volume",
-          title: `${totalSpans.toLocaleString()} OpenTelemetry spans in Grail (last 24h)`,
+          title: `${totalSpans.toLocaleString()} OpenTelemetry spans in Grail (last 30d)`,
           description: "OpenTelemetry traces are flowing into Grail, indicating Gen3 distributed tracing is active.",
           severity: getGen3Severity(totalSpans, config.otelTraces),
           recommendation: "Review trace sampling rates and ensure critical services are instrumented.",
@@ -278,7 +278,7 @@ export function useStorageReview(): ReviewAreaResult {
     findings.push({
       id: "storage-summary",
       title: "Grail storage summary",
-      description: `${bucketRecords.length} bucket(s) (${customBucketCount} custom), ${totalLogs.toLocaleString()} logs (24h), ${events.toLocaleString()} events (7d), ${totalBizEvents.toLocaleString()} bizevents (24h), ${totalSpans.toLocaleString()} spans (24h).`,
+      description: `${bucketRecords.length} bucket(s) (${customBucketCount} custom), ${totalLogs.toLocaleString()} logs (24h), ${events.toLocaleString()} events (30d), ${totalBizEvents.toLocaleString()} bizevents (30d), ${totalSpans.toLocaleString()} spans (30d).`,
       severity: "info",
       recommendation: customBucketCount === 0
         ? "Create custom Grail buckets and instrument business events to fully leverage the Gen3 data platform."

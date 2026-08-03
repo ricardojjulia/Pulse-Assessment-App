@@ -75,7 +75,7 @@ export function buildMigrationMetrics(
   summaryTemplate: string
 ): MigrationMetrics {
   const total = classicCount + gen3Count;
-  const percentage = total > 0 ? Math.round((gen3Count / total) * 100) : 100;
+  const percentage = total > 0 ? Math.round((gen3Count / total) * 100) : 0;
 
   return {
     level: classifyMigration(percentage),

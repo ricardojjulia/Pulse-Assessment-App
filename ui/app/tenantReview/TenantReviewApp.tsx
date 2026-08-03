@@ -53,6 +53,7 @@ export const TenantReviewApp: React.FC = () => {
           <Route path="/rum" element={<RumSession />} />
           <Route path="/logs" element={<LogMonitoring />} />
           <Route path="/metrics" element={<Metrics />} />
+          <Route path="/app-rubrics" element={<BestPracticesGuard />} />
           <Route path="/best-practices" element={<BestPracticesGuard />} />
           <Route path="/utilization" element={<Utilization />} />
           <Route path="/review-settings" element={<ReviewSettings />} />

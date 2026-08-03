@@ -17,6 +17,12 @@ import { CRITERION_ACTIONS } from "../remediationActions";
 import { CRITERION_IMPORTANCE } from "../data/criterionImportance";
 import { CAP_SUMMARIES } from "../data/capSummaries";
 
+function formatCriterionValue(value: number, isRatio: boolean): string {
+  if (!Number.isFinite(value)) return isRatio ? "0%" : "0";
+  if (isRatio) return `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
+  return Number.isInteger(value) ? value.toLocaleString() : value.toLocaleString(undefined, { maximumFractionDigits: 1 });
+}
+
 interface Props {
   capabilities: CapabilityResult[];
   anim: number;
@@ -26,13 +32,14 @@ interface Props {
 
 const CriterionRow: React.FC<{ cr: CapabilityResult["criteriaResults"][0]; dk: boolean }> = ({ cr, dk }) => {
   const [open, setOpen] = useState(false);
+  const displayValue = formatCriterionValue(cr.value, cr.isRatio);
 
   return (
     <Flex flexDirection="column"
       role="button"
       tabIndex={0}
       aria-expanded={open}
-      aria-label={`${cr.label}: ${cr.error ? "Error" : cr.points > 0 ? "Passed" : "Not met"}`}
+      aria-label={`${cr.label}: ${cr.error ? "Error" : cr.notApplicable ? "Not applicable" : cr.points > 0 ? "Passed" : "Not met"}`}
       style={{ borderRadius: 4, cursor: "pointer", transition: "background 0.15s",
         background: "transparent",
       }}
@@ -55,9 +62,9 @@ const CriterionRow: React.FC<{ cr: CapabilityResult["criteriaResults"][0]; dk: b
         </Tooltip>
         <Text style={{
           fontWeight: 600,
-          color: cr.error ? Colors.Text.Critical.Default : cr.points > 0 ? Colors.Text.Success.Default : Colors.Text.Neutral.Disabled,
+          color: cr.error ? Colors.Text.Critical.Default : cr.notApplicable ? Colors.Text.Neutral.Disabled : cr.points > 0 ? Colors.Text.Success.Default : Colors.Text.Neutral.Disabled,
         }}>
-          {cr.error ? "ERR" : cr.points > 0 ? `${cr.value} → ✓` : `${cr.value} → ✗`}
+          {cr.error ? "ERR" : cr.notApplicable ? "N/A" : cr.points > 0 ? `${displayValue} → ✓` : `${displayValue} → ✗`}
         </Text>
       </Flex>
       {open && (
@@ -77,12 +84,12 @@ const CriterionRow: React.FC<{ cr: CapabilityResult["criteriaResults"][0]; dk: b
             <Text style={{ color: Colors.Text.Neutral.Disabled }}>Pass threshold: </Text>
             <Text>{cr.thresholds}</Text>
           </Flex>
-          <Text style={{ fontWeight: 600, color: cr.error ? Colors.Text.Critical.Default : Colors.Text.Success.Default }}>
-            {cr.error ? "Query failed" : cr.points > 0 ? `${cr.value} found → ✓ Met` : `${cr.value} found → ✗ Not met`}
+          <Text style={{ fontWeight: 600, color: cr.error ? Colors.Text.Critical.Default : cr.notApplicable ? Colors.Text.Neutral.Disabled : Colors.Text.Success.Default }}>
+            {cr.error ? "Query failed" : cr.notApplicable ? "Not applicable for this tenant" : cr.points > 0 ? `${displayValue} → ✓ Met` : `${displayValue} → ✗ Not met`}
           </Text>
           {(() => {
             const rem = CRITERION_ACTIONS[cr.id];
-            if (!rem) return null;
+            if (!rem || cr.notApplicable) return null;
             return (
               <Flex flexDirection="column" style={{
                 marginTop: 6, paddingTop: 6,

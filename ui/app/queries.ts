@@ -11,7 +11,8 @@
 // ═══════════════════════════════════════════════════════════
 
 export interface Threshold {
-  min: number;
+  min?: number;
+  max?: number;
 }
 
 export interface Criterion {
@@ -21,6 +22,8 @@ export interface Criterion {
   query: string;
   /** Denominator query — result = query / queryB × 100 (coverage %). Omit for queries that compute ratio internally. */
   queryB?: string;
+  /** Optional query that determines whether the criterion applies to the tenant. */
+  applicabilityQuery?: string;
   thresholds: Threshold[];
 }
 
@@ -29,6 +32,9 @@ export interface CapabilityDef {
   color: string;
   criteria: Criterion[];
 }
+
+const AI_SPANS_QUERY = "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count()";
+const BIZEVENTS_QUERY = "fetch bizevents | filter timestamp > now() - 2h | summarize count()";
 
 export const CAPABILITIES: CapabilityDef[] = [
   // ─── 1. INFRASTRUCTURE OBSERVABILITY ───
@@ -83,6 +89,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of Kubernetes clusters with active workload monitoring.",
         query: "timeseries val=avg(dt.kubernetes.container.cpu_usage), by:{k8s.cluster.name} | fields k8s.cluster.name | dedup k8s.cluster.name | summarize c=count()",
         queryB: "fetch dt.entity.kubernetes_cluster | summarize count()",
+        applicabilityQuery: "fetch dt.entity.kubernetes_cluster | summarize count()",
         thresholds: [{ min: 90 }, { min: 50 }, { min: 1 }],
       },
       {
@@ -104,6 +111,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of K8s namespaces with running cloud-native workloads.",
         query: "fetch dt.entity.cloud_application | fieldsAdd ns = belongs_to[dt.entity.cloud_application_namespace] | expand ns | summarize count = countDistinct(ns)",
         queryB: "fetch dt.entity.cloud_application_namespace | summarize count()",
+        applicabilityQuery: "fetch dt.entity.cloud_application_namespace | summarize count()",
         thresholds: [{ min: 80 }, { min: 50 }, { min: 1 }],
       },
       {
@@ -118,6 +126,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of Kubernetes clusters with at least one detected cloud application namespace — validates workload topology.",
         query: "fetch dt.entity.kubernetes_cluster | fieldsAdd ns = contains[dt.entity.cloud_application_namespace] | expand ns | summarize count = countDistinct(id)",
         queryB: "fetch dt.entity.kubernetes_cluster | summarize count()",
+        applicabilityQuery: "fetch dt.entity.kubernetes_cluster | summarize count()",
         thresholds: [{ min: 80 }, { min: 50 }, { min: 1 }],
       },
       // ── Cloud Platform Monitoring ──
@@ -168,6 +177,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Ratio of K8s nodes to clusters — validates node-level cloud compute monitoring.",
         query: "timeseries val=avg(dt.kubernetes.container.cpu_usage), by:{k8s.node.name} | fields k8s.node.name | dedup k8s.node.name | summarize c=count()",
         queryB: "fetch dt.entity.kubernetes_cluster | summarize count()",
+        applicabilityQuery: "fetch dt.entity.kubernetes_cluster | summarize count()",
         thresholds: [{ min: 100 }, { min: 50 }, { min: 1 }],
       },
       {
@@ -175,6 +185,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of K8s namespaces with active container metrics — validates cloud workload observability.",
         query: "timeseries val=avg(dt.kubernetes.container.cpu_usage), by:{k8s.namespace.name} | fields k8s.namespace.name | dedup k8s.namespace.name | summarize c=count()",
         queryB: "fetch dt.entity.cloud_application_namespace | summarize count()",
+        applicabilityQuery: "fetch dt.entity.cloud_application_namespace | summarize count()",
         thresholds: [{ min: 80 }, { min: 50 }, { min: 1 }],
       },
       // ── Container Health ──
@@ -183,6 +194,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of K8s namespaces with container restart tracking — critical for detecting CrashLoopBackOff and OOM issues.",
         query: "timeseries val=max(dt.kubernetes.container.restarts), by:{k8s.namespace.name} | fields k8s.namespace.name | dedup k8s.namespace.name | summarize c=count()",
         queryB: "fetch dt.entity.cloud_application_namespace | summarize count()",
+        applicabilityQuery: "fetch dt.entity.cloud_application_namespace | summarize count()",
         thresholds: [{ min: 80 }, { min: 50 }, { min: 1 }],
       },
       {
@@ -190,6 +202,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of K8s namespaces with defined resource limits — essential for cluster stability and resource governance.",
         query: "timeseries val=avg(dt.kubernetes.container.limits_cpu), by:{k8s.namespace.name} | fields k8s.namespace.name | dedup k8s.namespace.name | summarize c=count()",
         queryB: "fetch dt.entity.cloud_application_namespace | summarize count()",
+        applicabilityQuery: "fetch dt.entity.cloud_application_namespace | summarize count()",
         thresholds: [{ min: 80 }, { min: 50 }, { min: 1 }],
       },
     ],
@@ -291,6 +304,41 @@ export const CAPABILITIES: CapabilityDef[] = [
         queryB: "fetch spans, from:now()-2h | filter isNotNull(db.system) | summarize count = countDistinct(coalesce(dt.entity.service, service.name))",
         thresholds: [{ min: 30 }, { min: 10 }, { min: 1 }],
       },
+      {
+        id: "a14", label: "Frontend trace correlation (%)",
+        description: "Percentage of web applications with request events carrying a trace id so browser activity can be tied back to backend spans.",
+        query: "fetch user.events, from:now()-24h | filter characteristics.has_request == true | filter isNotNull(trace.id) | summarize c=countDistinct(dt.rum.application.entity) | fields c",
+        queryB: "fetch dt.entity.application | summarize count()",
+        thresholds: [{ min: 60 }, { min: 25 }, { min: 1 }],
+      },
+      {
+        id: "a15", label: "Route metadata coverage (%)",
+        description: "Percentage of services whose spans expose HTTP method and route metadata for deeper trace enrichment.",
+        query: "fetch spans, from:now()-2h | filter isNotNull(http.request.method) and isNotNull(http.route) | summarize c=countDistinct(coalesce(dt.entity.service, service.name)) | fields c",
+        queryB: "fetch dt.entity.service | summarize count()",
+        thresholds: [{ min: 70 }, { min: 35 }, { min: 1 }],
+      },
+      {
+        id: "a16", label: "Exception trace coverage (%)",
+        description: "Percentage of services whose spans surface exception details so failures stay visible in the trace itself.",
+        query: "fetch spans, from:now()-2h | filter isNotNull(exception.type) or isNotNull(exception.message) | summarize c=countDistinct(coalesce(dt.entity.service, service.name)) | fields c",
+        queryB: "fetch dt.entity.service | summarize count()",
+        thresholds: [{ min: 50 }, { min: 20 }, { min: 1 }],
+      },
+      {
+        id: "a17", label: "Release context coverage (%)",
+        description: "Percentage of services with version or deployment metadata in spans so incidents can be tied to releases.",
+        query: "fetch spans, from:now()-2h | filter isNotNull(service.version) or isNotNull(deployment.environment) | summarize c=countDistinct(coalesce(dt.entity.service, service.name)) | fields c",
+        queryB: "fetch dt.entity.service | summarize count()",
+        thresholds: [{ min: 50 }, { min: 20 }, { min: 1 }],
+      },
+      {
+        id: "a18", label: "Trace-log correlation coverage (%)",
+        description: "Percentage of logs carrying trace or span identifiers so trace improvements can be validated from the log stream.",
+        query: "fetch logs | filter timestamp > now() - 2h | filter isNotNull(trace_id) or isNotNull(span_id) | summarize count()",
+        queryB: "fetch logs | filter timestamp > now() - 2h | summarize count()",
+        thresholds: [{ min: 60 }, { min: 25 }, { min: 1 }],
+      },
     ],
   },
 
@@ -304,6 +352,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of web applications with active user action metrics.",
         query: "timeseries val=sum(dt.frontend.user_action.count), by:{dt.entity.application} | fields dt.entity.application | dedup dt.entity.application | summarize c=count()",
         queryB: "fetch dt.entity.application | summarize count()",
+        applicabilityQuery: "fetch dt.entity.application | summarize count()",
         thresholds: [{ min: 80 }, { min: 50 }, { min: 1 }],
       },
       {
@@ -311,6 +360,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of web applications with active session tracking.",
         query: "timeseries val=avg(dt.frontend.session.active.estimated_count), by:{dt.entity.application} | fields dt.entity.application | dedup dt.entity.application | summarize c=count()",
         queryB: "fetch dt.entity.application | summarize count()",
+        applicabilityQuery: "fetch dt.entity.application | summarize count()",
         thresholds: [{ min: 80 }, { min: 50 }, { min: 1 }],
       },
       {
@@ -318,6 +368,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of web applications with Largest Contentful Paint metrics — Core Web Vital.",
         query: "timeseries val=avg(dt.frontend.web.page.largest_contentful_paint), by:{dt.entity.application} | fields dt.entity.application | dedup dt.entity.application | summarize c=count()",
         queryB: "fetch dt.entity.application | summarize count()",
+        applicabilityQuery: "fetch dt.entity.application | summarize count()",
         thresholds: [{ min: 80 }, { min: 50 }, { min: 1 }],
       },
       {
@@ -325,6 +376,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of web applications with Interaction to Next Paint metrics — Core Web Vital.",
         query: "timeseries val=avg(dt.frontend.web.page.interaction_to_next_paint), by:{dt.entity.application} | fields dt.entity.application | dedup dt.entity.application | summarize c=count()",
         queryB: "fetch dt.entity.application | summarize count()",
+        applicabilityQuery: "fetch dt.entity.application | summarize count()",
         thresholds: [{ min: 80 }, { min: 50 }, { min: 1 }],
       },
       {
@@ -332,6 +384,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of web applications with Cumulative Layout Shift metrics — Core Web Vital.",
         query: "timeseries val=avg(dt.frontend.web.page.cumulative_layout_shift), by:{dt.entity.application} | fields dt.entity.application | dedup dt.entity.application | summarize c=count()",
         queryB: "fetch dt.entity.application | summarize count()",
+        applicabilityQuery: "fetch dt.entity.application | summarize count()",
         thresholds: [{ min: 80 }, { min: 50 }, { min: 1 }],
       },
       {
@@ -339,6 +392,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of web applications with error tracking enabled.",
         query: "timeseries val=sum(dt.frontend.error.count), by:{dt.entity.application} | fields dt.entity.application | dedup dt.entity.application | summarize c=count()",
         queryB: "fetch dt.entity.application | summarize count()",
+        applicabilityQuery: "fetch dt.entity.application | summarize count()",
         thresholds: [{ min: 70 }, { min: 40 }, { min: 1 }],
       },
       {
@@ -346,6 +400,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of web applications covered by HTTP synthetic monitors.",
         query: "fetch dt.entity.http_check | summarize count()",
         queryB: "fetch dt.entity.application | summarize count()",
+        applicabilityQuery: "fetch dt.entity.application | summarize count()",
         thresholds: [{ min: 100 }, { min: 50 }, { min: 1 }],
       },
       {
@@ -353,6 +408,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of web applications covered by browser-based synthetic tests.",
         query: "fetch dt.entity.synthetic_test | summarize count()",
         queryB: "fetch dt.entity.application | summarize count()",
+        applicabilityQuery: "fetch dt.entity.application | summarize count()",
         thresholds: [{ min: 100 }, { min: 50 }, { min: 1 }],
       },
       {
@@ -360,6 +416,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of total applications that have mobile monitoring.",
         query: "fetch dt.entity.mobile_application | summarize count()",
         queryB: "fetch dt.entity.application | fieldsAdd type = \"web\" | append [fetch dt.entity.mobile_application | fieldsAdd type = \"mob\"] | summarize count()",
+        applicabilityQuery: "fetch dt.entity.mobile_application | summarize count()",
         thresholds: [{ min: 30 }, { min: 10 }, { min: 1 }],
       },
       {
@@ -367,6 +424,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Ratio of synthetic locations to total synthetic monitors.",
         query: "fetch dt.entity.synthetic_location | summarize count()",
         queryB: "fetch dt.entity.http_check | fieldsAdd type = \"http\" | append [fetch dt.entity.synthetic_test | fieldsAdd type = \"browser\"] | summarize count()",
+        applicabilityQuery: "fetch dt.entity.http_check | fieldsAdd type = \"http\" | append [fetch dt.entity.synthetic_test | fieldsAdd type = \"browser\"] | summarize count()",
         thresholds: [{ min: 100 }, { min: 50 }, { min: 1 }],
       },
       {
@@ -374,7 +432,37 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Ratio of synthetic monitors to web applications — validates proactive availability monitoring.",
         query: "fetch dt.entity.http_check | fieldsAdd type = \"http\" | append [fetch dt.entity.synthetic_test | fieldsAdd type = \"browser\"] | summarize count()",
         queryB: "fetch dt.entity.application | summarize count()",
+        applicabilityQuery: "fetch dt.entity.application | summarize count()",
         thresholds: [{ min: 100 }, { min: 50 }, { min: 1 }],
+      },
+      {
+        id: "d12", label: "Session replay coverage (%)",
+        description: "Percentage of web applications with session replay data so customer journeys can be replayed and investigated.",
+        query: "fetch user.replays, from:now()-24h | summarize c=countDistinct(dt.rum.application.entity) | fields c",
+        queryB: "fetch dt.entity.application | summarize count()",
+        thresholds: [{ min: 40 }, { min: 15 }, { min: 1 }],
+      },
+      {
+        id: "d13", label: "Navigation journey coverage (%)",
+        description: "Percentage of web applications with navigation events so funnels, paths, and drop-offs can be understood.",
+        query: "fetch user.events, from:now()-24h | filter characteristics.has_navigation == true | summarize c=countDistinct(dt.rum.application.entity) | fields c",
+        queryB: "fetch dt.entity.application | summarize count()",
+        thresholds: [{ min: 60 }, { min: 25 }, { min: 1 }],
+      },
+      {
+        id: "d14", label: "Page/view summary coverage (%)",
+        description: "Percentage of web and mobile applications with page or view summary data for engagement analysis.",
+        query: "fetch user.events, from:now()-24h | filter characteristics.has_page_summary == true or characteristics.has_view_summary == true | summarize c=countDistinct(dt.rum.application.entity) | fields c",
+        queryB: "fetch dt.entity.application | summarize count()",
+        thresholds: [{ min: 60 }, { min: 25 }, { min: 1 }],
+      },
+      {
+        id: "d15", label: "Mobile crash coverage (%)",
+        description: "Percentage of mobile applications with crash or ANR telemetry for mobile demystification and triage.",
+        query: "fetch user.events, from:now()-7d | filter characteristics.has_crash == true or characteristics.has_anr == true | summarize c=countDistinct(dt.rum.application.entity) | fields c",
+        queryB: "fetch dt.entity.mobile_application | summarize count()",
+        applicabilityQuery: "fetch dt.entity.mobile_application | summarize count()",
+        thresholds: [{ min: 50 }, { min: 20 }, { min: 1 }],
       },
     ],
   },
@@ -505,25 +593,25 @@ export const CAPABILITIES: CapabilityDef[] = [
     color: "#EF4444",
     criteria: [
       {
-        id: "s1", label: "Service security coverage (%)",
-        description: "Percentage of services covered by security event detection.",
-        query: 'fetch events | filter event.kind == "SECURITY_EVENT" | filter timestamp > now() - 24h | fieldsAdd affected = affected_entity_ids | expand affected | summarize count = countDistinct(affected) | fields count',
+        id: "s1", label: "Service security activity (30d, %)",
+        description: "Percentage of services with security events in the last 30 days. This measures recent AppSec utilization, not merely configuration.",
+        query: 'fetch events, from:now()-30d | filter event.kind == "SECURITY_EVENT" | fieldsAdd affected = affected_entity_ids | expand affected | filter startsWith(affected, "SERVICE-") | summarize count = countDistinct(affected) | fields count',
         queryB: "fetch dt.entity.service | summarize count()",
         thresholds: [{ min: 30 }, { min: 10 }, { min: 1 }],
       },
       {
-        id: "s2", label: "Security event type coverage (%)",
-        description: "Percentage of security event types detected vs expected categories.",
-        query: 'fetch events | filter event.kind == "SECURITY_EVENT" | filter timestamp > now() - 24h | summarize countDistinct(event.type)',
-        queryB: 'fetch events | filter event.kind == "SECURITY_EVENT" | filter timestamp > now() - 24h | summarize count = countDistinct(event.type) | fields expected = 5',
+        id: "s2", label: "Security event type activity (30d, %)",
+        description: "Recent breadth of security event types detected over the last 30 days vs a 5-category baseline.",
+        query: 'fetch events, from:now()-30d | filter event.kind == "SECURITY_EVENT" | summarize countDistinct(event.type)',
+        queryB: 'fetch events, from:now()-30d | filter event.kind == "SECURITY_EVENT" | summarize count = countDistinct(event.type) | fields expected = 5',
         thresholds: [{ min: 60 }, { min: 20 }],
       },
       {
         id: "s3", label: "Runtime vulnerability baseline (%)",
-        description: "Percentage of services with associated process groups — required for Runtime Application Protection (RASP) and vulnerability analysis.",
-        query: "fetch dt.entity.service | fieldsAdd pgi = runs_on[dt.entity.process_group_instance] | expand pgi | summarize count = countDistinct(id)",
+        description: "Percentage of services with runtime vulnerability evidence in the last 30 days.",
+        query: 'fetch events, from:now()-30d | filter event.kind == "SECURITY_EVENT" | filter contains(lower(toString(event.type)), "vulnerab") or contains(lower(toString(event.category)), "vulnerab") | fieldsAdd affected = affected_entity_ids | expand affected | filter startsWith(affected, "SERVICE-") | summarize count = countDistinct(affected) | fields count',
         queryB: "fetch dt.entity.service | summarize count()",
-        thresholds: [{ min: 80 }, { min: 50 }, { min: 1 }],
+        thresholds: [{ min: 100 }],
       },
       {
         id: "s4", label: "Database interaction security (%)",
@@ -563,7 +651,7 @@ export const CAPABILITIES: CapabilityDef[] = [
       {
         id: "s9", label: "Davis security problem coverage (%)",
         description: "Percentage of services covered by Davis AI problem detection.",
-        query: "fetch dt.davis.problems, from:now()-72h | filter not(dt.davis.is_duplicate) | summarize count()",
+        query: 'fetch dt.davis.problems, from:now()-72h | filter not(dt.davis.is_duplicate) | fieldsAdd affected = affected_entity_ids | expand affected | filter startsWith(affected, "SERVICE-") | summarize count = countDistinct(affected)',
         queryB: "fetch dt.entity.service | summarize count()",
         thresholds: [{ min: 10 }, { min: 1 }],
       },
@@ -575,9 +663,9 @@ export const CAPABILITIES: CapabilityDef[] = [
         thresholds: [{ min: 80 }, { min: 50 }, { min: 1 }],
       },
       {
-        id: "s11", label: "Attack detection coverage (%)",
-        description: "Percentage of services with security attack events detected — validates Runtime Application Protection (RASP).",
-        query: 'fetch events | filter event.kind == "SECURITY_EVENT" | filter timestamp > now() - 72h | fieldsAdd affected = affected_entity_ids | expand affected | summarize count = countDistinct(affected) | fields count',
+        id: "s11", label: "Attack detection activity (30d, %)",
+        description: "Percentage of services with attack-related security events in the last 30 days — validates recent Runtime Application Protection utilization.",
+        query: 'fetch events, from:now()-30d | filter event.kind == "SECURITY_EVENT" | filter contains(lower(toString(event.type)), "attack") or contains(lower(toString(event.category)), "attack") or contains(lower(toString(event.provider)), "appsec") | fieldsAdd affected = affected_entity_ids | expand affected | filter startsWith(affected, "SERVICE-") | summarize count = countDistinct(affected) | fields count',
         queryB: "fetch dt.entity.service | summarize count()",
         thresholds: [{ min: 10 }, { min: 1 }],
       },
@@ -613,7 +701,7 @@ export const CAPABILITIES: CapabilityDef[] = [
       {
         id: "t4", label: "Security event service coverage (%)",
         description: "Percentage of services with security events detected.",
-        query: 'fetch events | filter event.kind == "SECURITY_EVENT" | filter timestamp > now() - 24h | fieldsAdd affected = affected_entity_ids | expand affected | summarize count = countDistinct(affected) | fields count',
+        query: 'fetch events, from:now()-30d | filter event.kind == "SECURITY_EVENT" | fieldsAdd affected = affected_entity_ids | expand affected | filter startsWith(affected, "SERVICE-") | summarize count = countDistinct(affected) | fields count',
         queryB: "fetch dt.entity.service | summarize count()",
         thresholds: [{ min: 20 }, { min: 5 }, { min: 1 }],
       },
@@ -679,6 +767,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of services with AI/LLM spans.",
         query: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count = countDistinct(coalesce(dt.entity.service, service.name)) | fields count",
         queryB: "fetch dt.entity.service | summarize count()",
+        applicabilityQuery: AI_SPANS_QUERY,
         thresholds: [{ min: 10 }, { min: 5 }, { min: 1 }],
       },
       {
@@ -686,6 +775,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of AI spans with token usage tracking.",
         query: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | filter isNotNull(gen_ai.usage.input_tokens) or isNotNull(gen_ai.usage.output_tokens) | summarize count()",
         queryB: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count()",
+        applicabilityQuery: AI_SPANS_QUERY,
         thresholds: [{ min: 80 }, { min: 50 }, { min: 1 }],
       },
       {
@@ -693,6 +783,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of known AI providers detected vs expected (out of 5).",
         query: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | fieldsAdd provider = coalesce(gen_ai.system, gen_ai.provider.name) | summarize countDistinct(provider)",
         queryB: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | fieldsAdd provider = coalesce(gen_ai.system, gen_ai.provider.name) | summarize count = countDistinct(provider) | fields expected = 5",
+        applicabilityQuery: AI_SPANS_QUERY,
         thresholds: [{ min: 40 }, { min: 20 }],
       },
       {
@@ -700,6 +791,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of AI spans with agent invocation tracing.",
         query: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | filter isNotNull(gen_ai.agent.name) | summarize count()",
         queryB: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count()",
+        applicabilityQuery: AI_SPANS_QUERY,
         thresholds: [{ min: 30 }, { min: 10 }, { min: 1 }],
       },
       {
@@ -707,20 +799,23 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of AI spans with prompt or response tracing.",
         query: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | filter isNotNull(gen_ai.prompt) or isNotNull(gen_ai.completion) or isNotNull(gen_ai.input.messages) or isNotNull(gen_ai.output.messages) | summarize count()",
         queryB: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count()",
+        applicabilityQuery: AI_SPANS_QUERY,
         thresholds: [{ min: 80 }, { min: 50 }, { min: 1 }],
       },
       {
-        id: "ai6", label: "AI error tracking coverage (%)",
-        description: "Percentage of AI spans with error status tracking.",
-        query: 'fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | filter status_code == "ERROR" | summarize count()',
+        id: "ai6", label: "AI status tracking coverage (%)",
+        description: "Percentage of AI spans with request status captured for error analysis.",
+        query: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | filter isNotNull(status_code) | summarize count()",
         queryB: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count()",
-        thresholds: [{ min: 1 }],
+        applicabilityQuery: AI_SPANS_QUERY,
+        thresholds: [{ min: 80 }, { min: 50 }, { min: 1 }],
       },
       {
         id: "ai7", label: "Guardrail coverage (%)",
         description: "Percentage of AI spans with guardrail monitoring.",
         query: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | filter isNotNull(gen_ai.guardrail) | summarize count()",
         queryB: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count()",
+        applicabilityQuery: AI_SPANS_QUERY,
         thresholds: [{ min: 50 }, { min: 20 }, { min: 1 }],
       },
       {
@@ -728,6 +823,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of AI spans with cost tracking.",
         query: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | filter isNotNull(gen_ai.usage.cost) | summarize count()",
         queryB: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count()",
+        applicabilityQuery: AI_SPANS_QUERY,
         thresholds: [{ min: 50 }, { min: 20 }, { min: 1 }],
       },
       {
@@ -735,6 +831,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of total spans that are AI-related.",
         query: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count()",
         queryB: "fetch spans, from:now()-2h | summarize count()",
+        applicabilityQuery: AI_SPANS_QUERY,
         thresholds: [{ min: 5 }, { min: 1 }],
       },
     ],
@@ -750,6 +847,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of services with associated business events.",
         query: "fetch bizevents | filter timestamp > now() - 2h | filter isNotNull(dt.entity.service) | summarize count = countDistinct(dt.entity.service) | fields count",
         queryB: "fetch dt.entity.service | summarize count()",
+        applicabilityQuery: BIZEVENTS_QUERY,
         thresholds: [{ min: 30 }, { min: 10 }, { min: 1 }],
       },
       {
@@ -757,6 +855,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of expected business event types detected (out of 10 baseline types).",
         query: "fetch bizevents | filter timestamp > now() - 2h | summarize countDistinct(event.type)",
         queryB: "fetch bizevents | filter timestamp > now() - 2h | summarize count = countDistinct(event.type) | fields expected = 10",
+        applicabilityQuery: BIZEVENTS_QUERY,
         thresholds: [{ min: 60 }, { min: 30 }],
       },
       {
@@ -764,6 +863,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of business events linked to services.",
         query: "fetch bizevents | filter timestamp > now() - 2h | filter isNotNull(dt.entity.service) | summarize count()",
         queryB: "fetch bizevents | filter timestamp > now() - 2h | summarize count()",
+        applicabilityQuery: BIZEVENTS_QUERY,
         thresholds: [{ min: 50 }, { min: 20 }, { min: 1 }],
       },
       {
@@ -771,6 +871,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of expected business event providers detected (out of 5 baseline providers).",
         query: "fetch bizevents | filter timestamp > now() - 2h | summarize countDistinct(event.provider)",
         queryB: "fetch bizevents | filter timestamp > now() - 2h | summarize count = countDistinct(event.provider) | fields expected = 5",
+        applicabilityQuery: BIZEVENTS_QUERY,
         thresholds: [{ min: 60 }, { min: 20 }],
       },
       {
@@ -778,6 +879,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of business events with revenue/monetary value.",
         query: "fetch bizevents | filter timestamp > now() - 2h | filter isNotNull(revenue) or isNotNull(amount) or isNotNull(value) | summarize count()",
         queryB: "fetch bizevents | filter timestamp > now() - 2h | summarize count()",
+        applicabilityQuery: BIZEVENTS_QUERY,
         thresholds: [{ min: 30 }, { min: 10 }, { min: 1 }],
       },
       {
@@ -785,6 +887,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of business events linked to RUM sessions.",
         query: "fetch bizevents | filter timestamp > now() - 2h | filter isNotNull(dt.rum.session_id) | summarize count()",
         queryB: "fetch bizevents | filter timestamp > now() - 2h | summarize count()",
+        applicabilityQuery: BIZEVENTS_QUERY,
         thresholds: [{ min: 30 }, { min: 10 }, { min: 1 }],
       },
       {
@@ -792,6 +895,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of business events correlated with distributed traces.",
         query: "fetch bizevents | filter timestamp > now() - 2h | filter isNotNull(trace_id) | summarize count()",
         queryB: "fetch bizevents | filter timestamp > now() - 2h | summarize count()",
+        applicabilityQuery: BIZEVENTS_QUERY,
         thresholds: [{ min: 30 }, { min: 10 }, { min: 1 }],
       },
       {
@@ -799,6 +903,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         description: "Percentage of business events with cost center or product data.",
         query: "fetch bizevents | filter timestamp > now() - 2h | filter isNotNull(dt.cost.costcenter) or isNotNull(dt.cost.product) | summarize count()",
         queryB: "fetch bizevents | filter timestamp > now() - 2h | summarize count()",
+        applicabilityQuery: BIZEVENTS_QUERY,
         thresholds: [{ min: 20 }, { min: 5 }, { min: 1 }],
       },
     ],
@@ -812,14 +917,14 @@ export const CAPABILITIES: CapabilityDef[] = [
       {
         id: "sd1", label: "Service deployment coverage (%)",
         description: "Percentage of services with deployment events in 24h.",
-        query: 'fetch events | filter event.kind == "DAVIS_EVENT" or event.kind == "CUSTOM_DEPLOYMENT" | filter timestamp > now() - 24h | fieldsAdd affected = affected_entity_ids | expand affected | summarize count = countDistinct(affected) | fields count',
+        query: 'fetch events | filter event.kind == "DAVIS_EVENT" or event.kind == "CUSTOM_DEPLOYMENT" | filter timestamp > now() - 24h | fieldsAdd affected = affected_entity_ids | expand affected | filter startsWith(affected, "SERVICE-") | summarize count = countDistinct(affected) | fields count',
         queryB: "fetch dt.entity.service | summarize count()",
         thresholds: [{ min: 30 }, { min: 10 }, { min: 1 }],
       },
       {
         id: "sd2", label: "Custom deployment coverage (%)",
         description: "Percentage of services with custom deployment markers from CI/CD.",
-        query: 'fetch events | filter event.kind == "CUSTOM_DEPLOYMENT" | filter timestamp > now() - 24h | fieldsAdd affected = affected_entity_ids | expand affected | summarize count = countDistinct(affected) | fields count',
+        query: 'fetch events | filter event.kind == "CUSTOM_DEPLOYMENT" | filter timestamp > now() - 24h | fieldsAdd affected = affected_entity_ids | expand affected | filter startsWith(affected, "SERVICE-") | summarize count = countDistinct(affected) | fields count',
         queryB: "fetch dt.entity.service | summarize count()",
         thresholds: [{ min: 20 }, { min: 5 }, { min: 1 }],
       },
@@ -861,7 +966,7 @@ export const CAPABILITIES: CapabilityDef[] = [
       {
         id: "sd8", label: "Davis problem detection (%)",
         description: "Percentage of services covered by Davis AI problem detection — validates automated quality feedback loop.",
-        query: "fetch dt.davis.problems, from:now()-72h | filter not(dt.davis.is_duplicate) | fieldsAdd affected = affected_entity_ids | expand affected | summarize count = countDistinct(affected)",
+        query: 'fetch dt.davis.problems, from:now()-72h | filter not(dt.davis.is_duplicate) | fieldsAdd affected = affected_entity_ids | expand affected | filter startsWith(affected, "SERVICE-") | summarize count = countDistinct(affected)',
         queryB: "fetch dt.entity.service | summarize count()",
         thresholds: [{ min: 30 }, { min: 10 }, { min: 1 }],
       },

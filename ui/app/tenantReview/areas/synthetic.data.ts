@@ -174,7 +174,7 @@ export function useSyntheticReview(): ReviewAreaResult {
           } else if (grailTotal === 0) {
             findings.push({
               id: "syn-no-grail",
-              title: "No Synthetic on Grail execution data (last 7 days)",
+              title: "No Synthetic on Grail execution data (last 30 days)",
               description: "No synthetic execution events found in dt.synthetic.events. Synthetic on Grail stores execution results for DQL-based analysis.",
               severity: "warning",
               recommendation: "Verify synthetic monitors are executing and results are flowing to Grail.",
@@ -185,7 +185,7 @@ export function useSyntheticReview(): ReviewAreaResult {
             ).join(", ");
             findings.push({
               id: "syn-grail-active",
-              title: `${grailTotal.toLocaleString()} Synthetic on Grail executions (last 7 days)`,
+              title: `${grailTotal.toLocaleString()} Synthetic on Grail executions (last 30 days)`,
               description: `${grailTypeCount} execution type(s): ${typeDetails}. Execution data in Grail enables DQL-based analysis and dashboarding.`,
               severity: getGen3Severity(grailTotal, config.syntheticGrailExecution),
               recommendation: "Monitor execution trends and set up DQL-based alerting for synthetic failures.",
@@ -207,7 +207,7 @@ export function useSyntheticReview(): ReviewAreaResult {
         // Summary
         findings.push({
           id: "syn-summary",
-          title: `Synthetic: ${totalTests} classic, ${namCount} NAM, ${grailTotal.toLocaleString()} Grail executions (7d)`,
+          title: `Synthetic: ${totalTests} classic, ${namCount} NAM, ${grailTotal.toLocaleString()} Grail executions (30d)`,
           description: `${monitorTypes} monitor type(s) in use. NAM monitors (DNS/ICMP/TCP) are Gen3-native. Synthetic on Grail provides DQL-queryable execution data.`,
           severity: namCount > 0 && grailTotal >= 100 ? "success" :
             namCount > 0 || grailTotal > 0 ? "info" : "warning",

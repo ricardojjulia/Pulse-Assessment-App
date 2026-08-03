@@ -52,6 +52,8 @@ const inverseScore = (value: number, warning: number, critical: number) => {
 };
 
 const formatNumber = (value: number) => value.toLocaleString();
+const formatSettingCount = (value: number | null | undefined) =>
+  value == null ? "N/A" : formatNumber(value);
 
 const firstRecord = (query: ReturnType<typeof useDql>) =>
   (query.data?.records?.[0] ?? {}) as Record<string, unknown>;
@@ -259,24 +261,35 @@ export const Utilization: React.FC = () => {
       .filter((record) => String((record as Record<string, unknown>)["event.status"] ?? "").toUpperCase().includes("CLOSED"))
       .reduce((sum, record) => sum + Number((record as Record<string, unknown>)["count()"] ?? 0), 0);
     const closureRate = problemCount > 0 ? (closedProblems / problemCount) * 100 : 0;
-    const issueTracking = settingsCounts.get(SETTINGS_SCHEMAS.issueTracking) ?? 0;
-    const frequentIssues = settingsCounts.get(SETTINGS_SCHEMAS.frequentIssues) ?? 0;
+    const settingRaw = (schema: string) => settingsCounts.get(schema);
+    const settingKnown = (schema: string) => settingRaw(schema) != null;
+    const settingCount = (schema: string) => settingRaw(schema) ?? 0;
+
+    const issueTrackingRaw = settingRaw(SETTINGS_SCHEMAS.issueTracking);
+    const issueTracking = issueTrackingRaw ?? 0;
+    const frequentIssuesRaw = settingRaw(SETTINGS_SCHEMAS.frequentIssues);
+    const frequentIssues = frequentIssuesRaw ?? 0;
 
     const wfDqlTotal = numericField(workflowHealth, ["total"]);
     const wfDqlSuccessRate = numericField(workflowHealth, ["successRate"]);
     const wfTotal = workflowExecutions?.totalCount || wfDqlTotal;
     const wfSuccessRate = workflowExecutions?.totalCount ? successRateFromFunction(workflowExecutions) : wfDqlSuccessRate;
     const wfWithExecutions = workflowExecutions?.workflowsWithExecutions ?? 0;
-    const ownerCount = settingsCounts.get(SETTINGS_SCHEMAS.ownershipTeams) ?? 0;
+    const ownerCountRaw = settingRaw(SETTINGS_SCHEMAS.ownershipTeams);
+    const ownerCount = ownerCountRaw ?? 0;
     const deploymentCount = numericField(deploymentEvents, ["total"]);
 
-    const ownershipConfig = settingsCounts.get(SETTINGS_SCHEMAS.ownershipConfig) ?? 0;
-    const autoTags = settingsCounts.get(SETTINGS_SCHEMAS.autoTagging) ?? 0;
-    const managementZones = settingsCounts.get(SETTINGS_SCHEMAS.managementZones) ?? 0;
-    const segments = settingsCounts.get(SETTINGS_SCHEMAS.segments) ?? 0;
+    const ownershipConfigRaw = settingRaw(SETTINGS_SCHEMAS.ownershipConfig);
+    const ownershipConfig = ownershipConfigRaw ?? 0;
+    const autoTagsRaw = settingRaw(SETTINGS_SCHEMAS.autoTagging);
+    const autoTags = autoTagsRaw ?? 0;
+    const managementZonesRaw = settingRaw(SETTINGS_SCHEMAS.managementZones);
+    const managementZones = managementZonesRaw ?? 0;
+    const segmentsRaw = settingRaw(SETTINGS_SCHEMAS.segments);
+    const segments = segmentsRaw ?? 0;
     const openPipelineConfigs = (openPipeline.data?.records?.length ?? 0)
-      + (settingsCounts.get(SETTINGS_SCHEMAS.openPipelineLogs) ?? 0)
-      + (settingsCounts.get(SETTINGS_SCHEMAS.openPipelineMetrics) ?? 0);
+      + settingCount(SETTINGS_SCHEMAS.openPipelineLogs)
+      + settingCount(SETTINGS_SCHEMAS.openPipelineMetrics);
     const spanTotal = numericField(spanQuality, ["total"]);
     const spanWithService = numericField(spanQuality, ["withServiceName"]);
     const spanQualityScore = spanTotal > 0 ? (spanWithService / spanTotal) * 100 : 0;
@@ -292,30 +305,37 @@ export const Utilization: React.FC = () => {
     const auditTotal = numericField(auditActivity, ["total"]);
     const uniqueUsers = numericField(auditActivity, ["uniqueUsers"]);
     const pipelineRows = openPipeline.data?.records?.length ?? 0;
+    const gen2OrgDebt = autoTags + managementZones;
+    const metadataScore = settingKnown(SETTINGS_SCHEMAS.autoTagging)
+      || settingKnown(SETTINGS_SCHEMAS.managementZones)
+      || settingKnown(SETTINGS_SCHEMAS.segments)
+      ? clamp((scoreByTarget(segments + ownerCount + ownershipConfig, 8) * 0.75) + (inverseScore(gen2OrgDebt, 0, 20) * 0.25))
+      : 0;
 
     const signalsEvidence: Evidence[] = [
-      { label: "Davis problem signal", value: `${formatNumber(problemCount)} problems / 7d`, score: scoreByTarget(problemCount, 25), note: "Enough signal exists for operations to learn from recurring conditions." },
-      { label: "Problem closure", value: `${Math.round(closureRate)}% closed`, score: problemCount > 0 ? closureRate : 20, note: "Closed problems indicate teams are acting on Davis signals." },
+      { label: "Davis signal presence", value: `${formatNumber(problemCount)} problems / 30d`, score: davisEventCount > 0 ? 100 : problemCount > 0 ? 70 : 0, note: "Recent Davis problems or events prove the signal path is active." },
+      { label: "Problem closure", value: problemCount > 0 ? `${Math.round(closureRate)}% closed` : "No problem history", score: problemCount > 0 ? closureRate : 0, note: "Closed problems indicate teams are acting on Davis signals." },
+      { label: "Problem noise control", value: `${formatNumber(problemCount)} problems / 30d`, score: problemCount > 0 ? inverseScore(problemCount, 50, 200) : davisEventCount > 0 ? 100 : 0, note: "High problem volume lowers effectiveness even when signal generation is active." },
       { label: "Davis events in Grail", value: formatNumber(davisEventCount), score: scoreByTarget(davisEventCount, 1000), note: "Davis events in Grail enable investigation and automation paths." },
-      { label: "Issue tracking", value: `${formatNumber(issueTracking)} integrations`, score: scoreByTarget(issueTracking, 1), note: "Tickets connect trusted signals to accountable work." },
-      { label: "Noise management", value: `${formatNumber(frequentIssues)} frequent issue configs`, score: scoreByTarget(frequentIssues, 1), note: "Frequent issue detection helps reduce recurring alert fatigue." },
+      { label: "Issue tracking", value: `${formatSettingCount(issueTrackingRaw)} integrations`, score: issueTrackingRaw == null ? 0 : scoreByTarget(issueTracking, 1), note: issueTrackingRaw == null ? "Could not verify issue tracking configuration." : "Tickets connect trusted signals to accountable work." },
+      { label: "Frequent issue detection", value: `${formatSettingCount(frequentIssuesRaw)} configs`, score: frequentIssuesRaw == null ? 0 : scoreByTarget(frequentIssues, 1), note: frequentIssuesRaw == null ? "Could not verify frequent issue detection configuration." : "Frequent issue detection helps reduce recurring alert fatigue." },
     ];
 
     const automationEvidence: Evidence[] = [
       { label: "Workflow execution volume", value: `${formatNumber(wfTotal)} executions / 30d`, score: scoreByTarget(wfTotal, 50), note: "Execution volume shows automation is actively used, not just configured." },
       { label: "Workflow reliability", value: `${Math.round(wfSuccessRate)}% success`, score: wfTotal > 0 ? wfSuccessRate : 0, note: "Reliable workflows are required before teams trust automated response." },
       { label: "Workflows with activity", value: formatNumber(wfWithExecutions), score: scoreByTarget(wfWithExecutions, 5), note: "Multiple active workflows imply broader operational coverage." },
-      { label: "Ownership distribution", value: `${formatNumber(ownerCount)} teams`, score: scoreByTarget(ownerCount, 5), note: "Ownership teams make automation route to accountable responders." },
-      { label: "Deployment signal", value: `${formatNumber(deploymentCount)} events / 7d`, score: scoreByTarget(deploymentCount, 20), note: "Deployment events let Davis correlate incidents with releases." },
+      { label: "Ownership distribution", value: `${formatSettingCount(ownerCountRaw)} teams`, score: ownerCountRaw == null ? 0 : scoreByTarget(ownerCount, 5), note: ownerCountRaw == null ? "Could not verify ownership teams." : "Ownership teams make automation route to accountable responders." },
+      { label: "Deployment signal", value: `${formatNumber(deploymentCount)} events / 30d`, score: scoreByTarget(deploymentCount, 20), note: "Deployment events let Davis correlate incidents with releases." },
     ];
 
     const foundationEvidence: Evidence[] = [
-      { label: "Ownership model", value: `${formatNumber(ownerCount)} teams / ${formatNumber(ownershipConfig)} configs`, score: scoreByTarget(ownerCount + ownershipConfig, 5), note: "Ownership metadata turns telemetry into assigned action." },
-      { label: "Tagging and segmentation", value: `${formatNumber(autoTags)} tags, ${formatNumber(managementZones)} MZs, ${formatNumber(segments)} segments`, score: scoreByTarget(autoTags + managementZones + segments, 25), note: "Consistent metadata improves filtering, routing, and reporting." },
+      { label: "Ownership model", value: `${formatSettingCount(ownerCountRaw)} teams / ${formatSettingCount(ownershipConfigRaw)} configs`, score: ownerCountRaw == null && ownershipConfigRaw == null ? 0 : scoreByTarget(ownerCount + ownershipConfig, 5), note: "Ownership metadata turns telemetry into assigned action." },
+      { label: "Gen3 organization model", value: `${formatSettingCount(segmentsRaw)} segments, ${formatSettingCount(autoTagsRaw)} auto-tags, ${formatSettingCount(managementZonesRaw)} MZs`, score: metadataScore, note: "Segments and ownership improve utilization; Gen2 auto-tags and management zones reduce this score." },
       { label: "OpenPipeline adoption", value: `${formatNumber(openPipelineConfigs)} signals`, score: scoreByTarget(openPipelineConfigs, 3), note: "Pipeline usage shows telemetry is being shaped before consumption." },
-      { label: "Span metadata quality", value: `${Math.round(spanQualityScore)}% with service.name`, score: spanTotal > 0 ? spanQualityScore : 35, note: "Trace metadata determines how useful distributed traces are in practice." },
-      { label: "Business event quality", value: `${Math.round(bizeventQualityScore)}% typed`, score: bizeventTotal > 0 ? bizeventQualityScore : 35, note: "Typed business events are easier to query, alert on, and explain." },
-      { label: "Debug log discipline", value: `${Math.round(debugRatio)}% debug/trace`, score: logTotal > 0 ? inverseScore(debugRatio, 10, 35) : 60, note: "High debug/trace volume can dilute useful signals and inflate cost." },
+      { label: "Span metadata quality", value: spanTotal > 0 ? `${Math.round(spanQualityScore)}% with service.name` : "No spans / 30d", score: spanTotal > 0 ? spanQualityScore : 0, note: "Trace metadata determines how useful distributed traces are in practice." },
+      { label: "Business event quality", value: bizeventTotal > 0 ? `${Math.round(bizeventQualityScore)}% typed` : "No business events / 30d", score: bizeventTotal > 0 ? bizeventQualityScore : 0, note: "Typed business events are easier to query, alert on, and explain." },
+      { label: "Debug log discipline", value: logTotal > 0 ? `${Math.round(debugRatio)}% debug/trace` : "No logs / 24h", score: logTotal > 0 ? inverseScore(debugRatio, 10, 35) : 0, note: "High debug/trace volume can dilute useful signals and inflate cost." },
     ];
 
     const engagementEvidence: Evidence[] = [

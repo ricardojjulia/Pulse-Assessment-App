@@ -56,7 +56,7 @@ const NAV_TREE: NavItem[] = [
     ],
   },
   {
-    to: "/best-practices", label: "Best Practices", icon: <CheckmarkIcon />,
+    to: "/app-rubrics", label: "App & Rubrics", icon: <CheckmarkIcon />,
   },
   {
     to: "/utilization", label: "Utilization", icon: <GridIcon />,
@@ -153,7 +153,7 @@ export const Sidebar: React.FC = () => {
   // Filter nav tree based on beta feature flags
   const filteredNavTree = useMemo(() => {
     return NAV_TREE.filter((item) => {
-      if (item.to === "/best-practices" && !config.betaFeatures.showBestPractices) return false;
+      if ((item.to === "/best-practices" || item.to === "/app-rubrics") && !config.betaFeatures.showBestPractices) return false;
       return true;
     });
   }, [config.betaFeatures.showBestPractices]);

@@ -55,6 +55,11 @@ export const CRITERION_TIERS: Record<string, CriterionTier> = {
   a11: "bestPractice",   // Service-process mapping
   a12: "excellence",     // Service tagging maturity
   a13: "excellence",     // Database call depth
+  a14: "foundation",     // Frontend trace correlation
+  a15: "bestPractice",   // Route metadata coverage
+  a16: "bestPractice",   // Exception trace coverage
+  a17: "excellence",     // Release context coverage
+  a18: "bestPractice",   // Trace-log correlation
 
   // ─── 3. DIGITAL EXPERIENCE ───
   d1:  "foundation",     // RUM action coverage
@@ -68,6 +73,10 @@ export const CRITERION_TIERS: Record<string, CriterionTier> = {
   d9:  "excellence",     // Mobile app coverage
   d10: "excellence",     // Synthetic location diversity
   d11: "bestPractice",   // Synthetic availability coverage
+  d12: "foundation",     // Session replay coverage
+  d13: "foundation",     // Navigation journey coverage
+  d14: "bestPractice",   // Page/view summary coverage
+  d15: "excellence",     // Mobile crash coverage
 
   // ─── 4. LOG ANALYTICS ───
   l1:  "foundation",     // Host log coverage
@@ -118,7 +127,7 @@ export const CRITERION_TIERS: Record<string, CriterionTier> = {
   ai2: "foundation",     // Token tracking coverage
   ai3: "bestPractice",   // AI provider diversity
   ai4: "bestPractice",   // Agent invocation coverage
-  ai6: "foundation",     // AI error tracking coverage
+  ai6: "foundation",     // AI status tracking coverage
   ai5: "excellence",     // Prompt/response tracing coverage
   ai7: "excellence",     // Guardrail coverage
   ai8: "excellence",     // Cost tracking coverage

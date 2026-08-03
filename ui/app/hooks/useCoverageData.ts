@@ -27,7 +27,7 @@ export interface CapabilityResult {
   /** Original score from DQL queries (before consolidation adjustment). */
   rawScore: number;
   details: string[];
-  criteriaResults: { id: string; label: string; description: string; value: number; points: number; error: boolean; query: string; thresholds: string; tier: CriterionTier; isRatio: boolean }[];
+  criteriaResults: { id: string; label: string; description: string; value: number; score: number; points: number; error: boolean; notApplicable: boolean; query: string; thresholds: string; tier: CriterionTier; isRatio: boolean; denominator?: number }[];
   maturity: MaturityResult;
   /** Consolidation factor (0–100). 100 = all data in DT, 30 = only 30% of estate in DT. */
   consolidation: number;
@@ -95,8 +95,32 @@ export interface CoverageData {
   resume: () => void;
 }
 
-function meetsThreshold(value: number, thresholds: Threshold[]): boolean {
-  return thresholds.some(t => value >= t.min);
+function thresholdTarget(thresholds: Threshold[]): { direction: "min" | "max"; value: number } {
+  const mins = thresholds.map(t => t.min).filter((v): v is number => typeof v === "number");
+  if (mins.length > 0) return { direction: "min", value: Math.max(...mins) };
+  const maxes = thresholds.map(t => t.max).filter((v): v is number => typeof v === "number");
+  if (maxes.length > 0) return { direction: "max", value: Math.min(...maxes) };
+  return { direction: "min", value: 1 };
+}
+
+function scoreAgainstThreshold(value: number, thresholds: Threshold[]): { score: number; passed: boolean } {
+  const target = thresholdTarget(thresholds);
+  if (target.direction === "max") {
+    const passed = value <= target.value;
+    const score = passed ? 100 : target.value <= 0 ? 0 : Math.max(0, Math.round((target.value / value) * 100));
+    return { score, passed };
+  }
+  const passed = value >= target.value;
+  const score = target.value <= 0 ? (passed ? 100 : 0) : Math.min(100, Math.round((value / target.value) * 100));
+  return { score, passed };
+}
+
+function formatThresholds(thresholds: Threshold[]): string {
+  return thresholds
+    .slice()
+    .sort((a, b) => (b.min ?? Number.NEGATIVE_INFINITY) - (a.min ?? Number.NEGATIVE_INFINITY))
+    .map(t => typeof t.min === "number" ? `≥${t.min}` : `≤${t.max}`)
+    .join(", ");
 }
 
 function extractNumeric(v: unknown): number | null {
@@ -133,6 +157,12 @@ function extractValue(result: any): number {
   } catch {
     return 0;
   }
+}
+
+function formatCriterionValue(value: number, isRatio: boolean): string {
+  if (!Number.isFinite(value)) return isRatio ? "0%" : "0";
+  if (!isRatio) return Number.isInteger(value) ? value.toLocaleString() : value.toLocaleString(undefined, { maximumFractionDigits: 1 });
+  return `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
 }
 
 interface DqlResult { value: number; scannedBytes: number; scannedRecords: number; scannedDataPoints: number; }
@@ -279,7 +309,11 @@ export function useCoverageData(): CoverageData {
     try {
       // Collect all queries for deduplication (include queryB for cross-entity criteria)
       const caps = capsRef.current;
-      const allQueries = caps.flatMap((c) => c.criteria.flatMap((cr) => cr.queryB ? [cr.query, cr.queryB] : [cr.query]));
+      const allQueries = caps.flatMap((c) => c.criteria.flatMap((cr) => {
+        const queries = cr.queryB ? [cr.query, cr.queryB] : [cr.query];
+        if (cr.applicabilityQuery) queries.push(cr.applicabilityQuery);
+        return queries;
+      }));
       const uniqueCount = new Set(allQueries).size;
       let completed = 0;
 
@@ -300,15 +334,20 @@ export function useCoverageData(): CoverageData {
 
         for (const criterion of cap.criteria) {
           const valueA = cache.get(criterion.query) ?? -1;
-          const isError = valueA === -1;
+          const valueB = criterion.queryB ? cache.get(criterion.queryB) ?? -1 : undefined;
+          const applicabilityValue = criterion.applicabilityQuery ? cache.get(criterion.applicabilityQuery) ?? -1 : 1;
+          const applicabilityError = criterion.applicabilityQuery ? applicabilityValue === -1 : false;
+          const denominatorError = criterion.queryB ? valueB === -1 : false;
+          const isError = valueA === -1 || denominatorError;
           let value: number;
+          let notApplicable = false;
           if (isError) {
             value = 0;
           } else if (criterion.queryB) {
             // Cross-entity ratio: (queryA / queryB) * 100
-            const valueB = cache.get(criterion.queryB) ?? -1;
-            if (valueB <= 0) {
+            if (!valueB || valueB <= 0) {
               value = 0;
+              notApplicable = valueB === 0;
             } else {
               value = Math.min(Math.round((valueA / valueB) * 1000) / 10, 100); // one decimal %, capped at 100
             }
@@ -316,42 +355,51 @@ export function useCoverageData(): CoverageData {
           } else {
             value = valueA;
           }
-          const passed = isError ? false : meetsThreshold(value, criterion.thresholds);
-          const thDesc = criterion.thresholds
-            .sort((a, b) => b.min - a.min)
-            .map(t => `≥${t.min}`)
-            .join(", ");
+          if (!isError && !applicabilityError && applicabilityValue <= 0) notApplicable = true;
+          const thresholdScore = scoreAgainstThreshold(value, criterion.thresholds);
+          const passed = isError || notApplicable ? false : thresholdScore.passed;
+          const thDesc = formatThresholds(criterion.thresholds);
           const tier = CRITERION_TIERS[criterion.id] || "foundation";
           criteriaResults.push({
             id: criterion.id,
             label: criterion.label,
             description: criterion.description,
             value: isError ? 0 : value,
+            score: isError || notApplicable ? 0 : thresholdScore.score,
             points: passed ? 1 : 0,
-            error: isError,
+            error: isError || applicabilityError,
+            notApplicable,
             query: criterion.queryB ? `${criterion.query}\n÷ ${criterion.queryB}` : criterion.query,
             thresholds: thDesc,
             tier,
             isRatio: !!criterion.queryB,
+            denominator: criterion.queryB ? valueB : undefined,
           });
-          if (!isError && value > 0) details.push(`${criterion.label}: ${value}`);
+          if (!isError && value > 0) details.push(`${criterion.label}: ${formatCriterionValue(value, !!criterion.queryB)}`);
         }
 
         // Compute maturity per tier
         const tierCounts = { foundation: { total: 0, passed: 0 }, bestPractice: { total: 0, passed: 0 }, excellence: { total: 0, passed: 0 } };
+        const tierScores = { foundation: { total: 0, score: 0 }, bestPractice: { total: 0, score: 0 }, excellence: { total: 0, score: 0 } };
         for (const cr of criteriaResults) {
+          if (cr.notApplicable) continue;
           const t = cr.tier;
           tierCounts[t].total++;
+          tierScores[t].total++;
+          tierScores[t].score += cr.score;
           if (!cr.error && cr.points > 0) tierCounts[t].passed++; // points is 0 or 1
         }
-        const fPct = tierCounts.foundation.total > 0 ? tierCounts.foundation.passed / tierCounts.foundation.total : 0;
-        const bPct = tierCounts.bestPractice.total > 0 ? tierCounts.bestPractice.passed / tierCounts.bestPractice.total : 0;
-        const ePct = tierCounts.excellence.total > 0 ? tierCounts.excellence.passed / tierCounts.excellence.total : 0;
+        const fPct = tierScores.foundation.total > 0 ? tierScores.foundation.score / tierScores.foundation.total / 100 : 0;
+        const bPct = tierScores.bestPractice.total > 0 ? tierScores.bestPractice.score / tierScores.bestPractice.total / 100 : 0;
+        const ePct = tierScores.excellence.total > 0 ? tierScores.excellence.score / tierScores.excellence.total / 100 : 0;
+        const fPassPct = tierCounts.foundation.total > 0 ? tierCounts.foundation.passed / tierCounts.foundation.total : 0;
+        const bPassPct = tierCounts.bestPractice.total > 0 ? tierCounts.bestPractice.passed / tierCounts.bestPractice.total : 0;
+        const ePassPct = tierCounts.excellence.total > 0 ? tierCounts.excellence.passed / tierCounts.excellence.total : 0;
         let level: 0 | 1 | 2 | 3 = 0;
         let levelLabel = "Not Adopted";
-        if (fPct >= 0.5) { level = 1; levelLabel = "Foundation"; }
-        if (fPct >= 1.0 && bPct >= 0.5) { level = 2; levelLabel = "Operational"; }
-        if (fPct >= 1.0 && bPct >= 1.0 && ePct >= 0.5) { level = 3; levelLabel = "Optimized"; }
+        if (fPassPct >= 0.5) { level = 1; levelLabel = "Foundation"; }
+        if (fPassPct >= 1.0 && bPassPct >= 0.5) { level = 2; levelLabel = "Operational"; }
+        if (fPassPct >= 1.0 && bPassPct >= 1.0 && ePassPct >= 0.5) { level = 3; levelLabel = "Optimized"; }
 
         // Progressive maturity: BP only counts if Foundation >= 80%, Excellence only if BP >= 60%
         const effB = fPct >= 0.8 ? bPct : 0;
@@ -369,8 +417,10 @@ export function useCoverageData(): CoverageData {
           maturityBand,
         };
 
-        const passedCount = criteriaResults.filter(cr => cr.points > 0).length;
-        const capScore = Math.round((passedCount / cap.criteria.length) * 100);
+        const applicableCriteria = criteriaResults.filter(cr => !cr.notApplicable);
+        const capScore = applicableCriteria.length > 0
+          ? Math.round(applicableCriteria.reduce((sum, cr) => sum + cr.score, 0) / applicableCriteria.length)
+          : 0;
 
         return { name: cap.name, color: cap.color, score: capScore, rawScore: capScore, details, criteriaResults, maturity, consolidation: 100, effectiveMaturityScore: maturityScore };
       });
@@ -399,13 +449,13 @@ export function useCoverageData(): CoverageData {
         networkInterfaces: (() => { const nq = 'fetch dt.entity.network_interface | fieldsAdd belongs_to = belongs_to[dt.entity.host] | expand belongs_to | summarize count = countDistinct(belongs_to)'; const v = cache.get(nq); return v != null && v > 0 ? v : 0; })(),
         disks: (() => { const dq = 'fetch dt.entity.disk | fieldsAdd belongs_to = belongs_to[dt.entity.host] | expand belongs_to | summarize count = countDistinct(belongs_to)'; const v = cache.get(dq); return v != null && v > 0 ? v : 0; })(),
         logs: ec('fetch logs | filter timestamp > now() - 2h | summarize count()'),
-        spans: ec('fetch spans, from:now()-72h | summarize count()'),
-        aiSpans: ec('fetch spans, from:now()-72h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count()'),
+        spans: ec('fetch spans, from:now()-2h | summarize count()'),
+        aiSpans: ec('fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count()'),
         events: ec('fetch events | filter timestamp > now() - 2h | summarize count()'),
         problems: ec('fetch dt.davis.problems, from:now()-72h | filter not(dt.davis.is_duplicate) | summarize count()'),
         bizEvents: ec('fetch bizevents | filter timestamp > now() - 2h | summarize count()'),
         cloudLogs: ec('fetch logs | filter timestamp > now() - 2h | filter isNotNull(cloud.provider) | summarize count()'),
-        securityEvents: ec('fetch events | filter event.kind == "SECURITY_EVENT" | filter timestamp > now() - 24h | fieldsAdd affected = affected_entity_ids | expand affected | summarize count = countDistinct(affected) | fields count'),
+        securityEvents: ec('fetch events, from:now()-30d | filter event.kind == "SECURITY_EVENT" | fieldsAdd affected = affected_entity_ids | expand affected | filter startsWith(affected, "SERVICE-") | summarize count = countDistinct(affected) | fields count'),
       });
       if (DEBUG) {
         console.group(`[CCA] Assessment Complete`);

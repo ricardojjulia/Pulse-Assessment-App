@@ -273,7 +273,7 @@ export function useAlertingReview(): ReviewAreaResult {
           } else if (davisEventCount === 0) {
             findings.push({
               id: "alert-no-davis-events",
-              title: "No Davis events in Grail (last 7d)",
+              title: "No Davis events in Grail (last 30d)",
               description: "No Davis events are flowing to Grail. Davis events in Grail indicate the Gen3 alerting path is active.",
               severity: "warning",
               recommendation: "Verify that Davis AI is enabled and events are being stored in Grail.",
@@ -281,7 +281,7 @@ export function useAlertingReview(): ReviewAreaResult {
           } else {
             findings.push({
               id: "alert-davis-events",
-              title: `${davisEventCount.toLocaleString()} Davis events in Grail (last 7d) — Gen3 alerting active`,
+              title: `${davisEventCount.toLocaleString()} Davis events in Grail (last 30d) — Gen3 alerting active`,
               description: "Davis events are flowing to Grail, confirming the Gen3 alerting pipeline is operational.",
               severity: getGen3Severity(davisEventCount, config.davisEvents),
               recommendation: "Continue leveraging Davis AI events in Grail for alerting workflows and root cause analysis.",
@@ -409,8 +409,8 @@ export function useAlertingReview(): ReviewAreaResult {
         const gen2Disabled = profileDisabled + notifDisabled + metricEventDisabled;
         findings.push({
           id: "alert-problem-summary",
-          title: `${problemCount} Davis problems in last 7 days`,
-          description: `Alerting profiles: ${profileEnabled} enabled${profileDisabled > 0 ? ` / ${profileDisabled} disabled` : ""}, Notifications: ${notifEnabled} enabled${notifDisabled > 0 ? ` / ${notifDisabled} disabled` : ""}, Metric events: ${metricEventEnabled} enabled${metricEventDisabled > 0 ? ` / ${metricEventDisabled} disabled` : ""}, Maintenance windows: ${mwCount}, Davis events (7d): ${davisEventCount.toLocaleString()}.`,
+          title: `${problemCount} Davis problems in last 30 days`,
+          description: `Alerting profiles: ${profileEnabled} enabled${profileDisabled > 0 ? ` / ${profileDisabled} disabled` : ""}, Notifications: ${notifEnabled} enabled${notifDisabled > 0 ? ` / ${notifDisabled} disabled` : ""}, Metric events: ${metricEventEnabled} enabled${metricEventDisabled > 0 ? ` / ${metricEventDisabled} disabled` : ""}, Maintenance windows: ${mwCount}, Davis events (30d): ${davisEventCount.toLocaleString()}.`,
           severity: "info",
           recommendation: "Review the alerting configuration to ensure coverage and reduce noise.",
         });

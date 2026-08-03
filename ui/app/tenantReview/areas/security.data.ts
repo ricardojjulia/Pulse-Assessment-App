@@ -4,7 +4,8 @@ import type { ReviewAreaResult, Finding, Check } from "../types/review.types";
 import { DQL_QUERIES, SETTINGS_SCHEMAS } from "../constants/queries";
 import { REVIEW_AREA_MAP } from "../constants/reviewAreas";
 import { calculateAreaScore, buildMigrationMetrics, classifyStatus } from "../utils/scoring";
-import { getSettingsObjectCounts } from "../services/settingsService";
+import { getSettingsEnabledCounts } from "../services/settingsService";
+import type { EnabledCounts } from "../services/settingsService";
 import { useReviewConfig, getAreaWeight, getGen2Severity, getGen3Severity } from "../hooks/useReviewConfig";
 import { functions } from "@dynatrace-sdk/app-utils";
 
@@ -49,7 +50,10 @@ export function useSecurityReview(): ReviewAreaResult {
 
     async function analyze() {
       try {
-        const settingsCounts = await getSettingsObjectCounts([SETTINGS_SCHEMAS.attackProtection]);
+        const settingsCounts = await getSettingsEnabledCounts([
+          SETTINGS_SCHEMAS.attackProtection,
+          SETTINGS_SCHEMAS.runtimeVulnDetection,
+        ]);
         if (cancelled) return;
 
         const findings: Finding[] = [];
@@ -100,30 +104,77 @@ export function useSecurityReview(): ReviewAreaResult {
           }
         }
 
-        // Check 3: Attack protection configured
-        const attackProtection = settingsCounts.get(SETTINGS_SCHEMAS.attackProtection) ?? 0;
+        // Check 3: Application Security configured and enabled
+        const attackProtectionData = (settingsCounts.get(SETTINGS_SCHEMAS.attackProtection) as EnabledCounts | null | undefined) ?? null;
+        const runtimeVulnData = (settingsCounts.get(SETTINGS_SCHEMAS.runtimeVulnDetection) as EnabledCounts | null | undefined) ?? null;
+        const attackProtectionTotal = attackProtectionData?.total ?? 0;
+        const attackProtection = attackProtectionData?.enabled ?? 0;
+        const attackProtectionDisabled = attackProtectionData?.disabled ?? 0;
+        const runtimeVulnTotal = runtimeVulnData?.total ?? 0;
+        const runtimeVulnEnabled = runtimeVulnData?.enabled ?? 0;
+        const runtimeVulnDisabled = runtimeVulnData?.disabled ?? 0;
+        const appSecSettingsAccessible = attackProtectionData !== null || runtimeVulnData !== null;
+        const appSecEnabled = attackProtection > 0 || runtimeVulnEnabled > 0;
+        const appSecConfigured = attackProtectionTotal > 0 || runtimeVulnTotal > 0;
+        const appSecDisabled = attackProtectionDisabled + runtimeVulnDisabled;
         checks.push({
-          name: "Attack protection configured",
+          name: "Application Security enabled in settings",
           weight: 0.15,
-          result: attackProtection > 0 ? "pass" : "partial",
-          partialValue: 0.3,
+          result: !appSecSettingsAccessible ? "partial" : appSecEnabled ? "pass" : appSecConfigured ? "fail" : "partial",
+          partialValue: !appSecSettingsAccessible ? 0.3 : !appSecConfigured ? 0.3 : undefined,
         });
-        if (attackProtection === 0) {
+        if (!appSecSettingsAccessible) {
+          findings.push({
+            id: "sec-appsec-settings-inaccessible",
+            title: "Cannot verify Application Security settings",
+            description: "The app could not read AppSec Settings 2.0 objects, so enabled/disabled state could not be confirmed.",
+            severity: "warning",
+            recommendation: "Verify settings:objects:read access and review builtin:appsec.attack-protection-settings and builtin:appsec.runtime-vulnerability-detection manually.",
+          });
+        } else if (appSecConfigured && !appSecEnabled) {
+          findings.push({
+            id: "sec-appsec-disabled",
+            title: "Application Security settings are configured but disabled",
+            description: `Attack protection: ${attackProtection} enabled / ${attackProtectionDisabled} disabled. Runtime vulnerability detection: ${runtimeVulnEnabled} enabled / ${runtimeVulnDisabled} disabled.`,
+            severity: "warning",
+            recommendation: "Turn on Application Security for in-scope services, or mark AppSec out of scope before treating this tenant as actively protected.",
+          });
+        } else if (!appSecConfigured) {
           findings.push({
             id: "sec-no-attack-protection",
-            title: "Attack protection not explicitly configured",
-            description: "Runtime Application Protection detects and blocks attacks in real-time.",
+            title: "Application Security not explicitly configured",
+            description: "No attack protection or runtime vulnerability detection settings were found.",
             severity: "info",
-            recommendation: "Review attack protection settings (builtin:appsec.attack-protection).",
+            recommendation: "Review AppSec settings: builtin:appsec.attack-protection-settings and builtin:appsec.runtime-vulnerability-detection.",
           });
         }
 
         // Check 4: Security event monitoring active
         checks.push({
-          name: "Security event monitoring active",
+          name: "Security event usage in last 30 days",
           weight: 0.1,
-          result: total > 0 || !securityEvents.error ? "pass" : "fail",
+          result: securityEvents.error ? "partial" : total > 0 ? "pass" : "fail",
+          partialValue: securityEvents.error ? 0.3 : undefined,
         });
+        if (securityEvents.error) {
+          findings.push({
+            id: "sec-events-error",
+            title: "Cannot query security events",
+            description: "Security event analysis is unavailable, so Application Security utilization could not be confirmed.",
+            severity: "warning",
+            recommendation: "Verify the app has access to security events in Grail and that the tenant stores security signals in events.",
+          });
+        } else if (total === 0) {
+          findings.push({
+            id: "sec-no-events-30d",
+            title: "No security events detected in the last 30 days",
+            description: "The security event datasource is reachable, but no recent AppSec usage signal was found. Do not treat this as active utilization without separate configuration evidence.",
+            severity: appSecEnabled ? "info" : "warning",
+            recommendation: appSecEnabled
+              ? "Confirm protected services have recent traffic and that vulnerability/attack events are routed to Grail."
+              : "Enable and validate Application Security for in-scope services, then re-check after traffic has flowed.",
+          });
+        }
 
         // --- Audit Logs ---
         const auditRow = (auditVolume.data?.records?.[0] ?? {}) as Record<string, unknown>;
@@ -202,21 +253,21 @@ export function useSecurityReview(): ReviewAreaResult {
             if (!attackResult.error) {
               const attackTotal = attackResult.totalCount;
               checks.push({
-                name: "Runtime attack detection active",
+                name: "Runtime attack protection signal",
                 weight: config.attacksDetected.weight,
-                result: attackTotal > 0 || attackProtection > 0 ? "pass" : "partial",
-                partialValue: attackTotal === 0 && attackProtection === 0 ? 0.3 : undefined,
+                result: attackTotal > 0 ? "pass" : appSecEnabled ? "partial" : "fail",
+                partialValue: attackTotal === 0 && appSecEnabled ? 0.6 : undefined,
               });
 
               if (attackTotal === 0) {
                 findings.push({
                   id: "sec-no-attacks",
                   title: "No runtime attacks detected (30d)",
-                  description: attackProtection > 0
+                  description: appSecEnabled
                     ? "Application Security is configured but no attacks were detected. This may be normal for low-traffic or internal applications."
                     : "No attacks detected and no attack protection configured. If you have web-facing applications, enable Application Security.",
-                  severity: attackProtection > 0 ? "info" : "warning",
-                  recommendation: attackProtection > 0
+                  severity: appSecEnabled ? "info" : "warning",
+                  recommendation: appSecEnabled
                     ? "Continue monitoring. Review Application Security settings periodically."
                     : "Enable Runtime Application Protection to detect SQL injection, SSRF, command injection, and JNDI attacks.",
                 });
@@ -255,7 +306,7 @@ export function useSecurityReview(): ReviewAreaResult {
         findings.push({
           id: "sec-summary",
           title: `Security: ${total} security events (${critical}C/${high}H/${medium}M/${low}L), ${auditTotal.toLocaleString()} audit entries`,
-          description: `Attack protection configs: ${attackProtection}. Audit categories: ${auditCatCount}. Security and audit data sourced from Grail.`,
+          description: `AppSec enabled configs: ${attackProtection + runtimeVulnEnabled}; disabled configs: ${appSecDisabled}. Audit categories: ${auditCatCount}. Security and audit data sourced from Grail and Settings 2.0.`,
           severity: "info",
           recommendation: "Maintain regular security reviews, audit log monitoring, and keep vulnerability count low.",
         });
@@ -265,7 +316,7 @@ export function useSecurityReview(): ReviewAreaResult {
         const score = calculateAreaScore(checks, areaWeight);
 
         // Security + audit are Gen3-native
-        const gen3Signals = (total > 0 || attackProtection > 0 ? 1 : 0) + (auditTotal > 0 ? 1 : 0);
+        const gen3Signals = (total > 0 || appSecEnabled ? 1 : 0) + (auditTotal > 0 ? 1 : 0);
         const migration = buildMigrationMetrics(
           0,
           gen3Signals,
