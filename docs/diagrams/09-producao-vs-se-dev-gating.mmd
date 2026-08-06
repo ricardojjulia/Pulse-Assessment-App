@@ -1,0 +1,27 @@
+flowchart TD
+    A[App loads] --> B[useDevMode hook]
+    B --> C{?dev=1<br/>ou<br/>localStorage.cca.dev?}
+
+    C -->|Yes| D[isDev = true<br/>SE Mode]
+    C -->|No| E[isDev = false<br/>Customer Mode]
+
+    D --> F[Mostra TUDO:]
+    F --> F1[Radar + cards]
+    F --> F2[ScaleTierBanner]
+    F --> F3[DPS cost badge]
+    F --> F4[Download Perf JSON]
+    F --> F5[Force Refresh button]
+    F --> F6[Export PDF report]
+
+    E --> G[Mostra customer-friendly:]
+    G --> G1[Radar + cards]
+    G --> G2[ScaleTierBanner]
+    G --> G3[DPS cost badge]
+    G --> G6[Export PDF report]
+    G -.X.-> G4[NO Perf JSON]
+    G -.X.-> G5[NO Force Refresh]
+
+    style D fill:#F59E0B,color:#fff
+    style E fill:#10B981,color:#fff
+    style F4 fill:#EF4444,color:#fff
+    style F5 fill:#EF4444,color:#fff

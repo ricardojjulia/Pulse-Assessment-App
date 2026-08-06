@@ -2,7 +2,7 @@
 
 ## Overview
 
-Pulse Assessment is a **Dynatrace App** built on the Dynatrace AppEngine platform. It evaluates observability coverage and maturity across 9 Dynatrace capabilities by executing DQL queries against real tenant data.
+Pulse Assessment is a **Dynatrace App** built on the Dynatrace AppEngine platform. It evaluates observability coverage and utilization across 9 Dynatrace capabilities by executing DQL queries against real tenant data.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -40,46 +40,63 @@ Pulse Assessment is a **Dynatrace App** built on the Dynatrace AppEngine platfor
 ## Project Structure
 
 ```
-cca-app/
+pulse-assessment/
 ├── app.config.json              # App manifest (ID, scopes, version)
 ├── package.json                 # Dependencies and scripts
-├── tsconfig.eslint.json         # ESLint TypeScript config
-├── eslint.config.mjs            # ESLint config
 ├── AGENTS.md                    # AI agent instructions
 ├── ui/
 │   ├── main.tsx                 # Entry point (AppRoot + Router)
-│   ├── tsconfig.json            # UI TypeScript config
-│   ├── assets/
-│   │   └── icon.svg             # App icon (Dynatrace Hub)
 │   └── app/
-│       ├── App.tsx              # Routes: / and /compare
+│       ├── App.tsx              # Routes: /, /compare, /ai-insights
 │       ├── queries.ts           # 9 capabilities, 111 DQL criteria
-│       ├── remediationActions.ts # Remediation actions for all 111 criteria
+│       ├── remediationActions.ts# Remediation actions for all 111 criteria
+│       ├── scale-tier.ts        # Scale tiers + Economy Mode (sampling/window)
+│       ├── trace-proxy.ts       # Metric/topology substitutes for span checks
+│       ├── appVersion.ts        # Version shown in the UI footer
+│       ├── ai/
+│       │   ├── assistIntent.ts        # sendIntent into native Assist
+│       │   ├── conversationStarters.ts# Per-page Assist starters
+│       │   ├── davisRecommendations.ts# Davis CoPilot per capability
+│       │   ├── promptTemplates.ts     # Versioned prompts (cache key)
+│       │   ├── reportPrompt.ts        # Assessment context for prompts
+│       │   └── smartReport.ts         # Narrative report via Davis CoPilot
 │       ├── components/
-│       │   ├── PolarChart.tsx   # Interactive canvas radar chart
-│       │   ├── ConnectorLines.tsx # Chart connector lines
-│       │   ├── ChartLabels.tsx  # Chart axis labels
-│       │   ├── CapabilityCards.tsx # Capability score cards
-│       │   ├── CopyableQuery.tsx # DQL query display with copy
-│       │   ├── ErrorBoundary.tsx # React error boundary
-│       │   └── Tooltip.tsx      # Reusable tooltip component
+│       │   ├── CovUtilRadar.tsx       # Radar; `coverageOnly` drops 2nd series
+│       │   ├── CapabilityScatter.tsx  # Coverage bars + Utilization line
+│       │   ├── TechRadar.tsx          # Coverage-view radar
+│       │   ├── CapabilityCards.tsx    # Capability score cards
+│       │   ├── DavisInsightSection.tsx# Collapsible AI insight + follow-ups
+│       │   ├── CustomReportModal.tsx  # Report builder (title/caps/sections)
+│       │   ├── SmartReportModal.tsx   # Free-text report via Assist
+│       │   ├── ScaleTierBanner.tsx    # Tier banner + CostModeNote
+│       │   ├── TraceProxyBanner.tsx   # Proxy-mode disclosure
+│       │   ├── DpsCostBadge.tsx       # Live scan/cost indicator
+│       │   ├── ConsolidationPanel.tsx # "Other tools" score adjustment
+│       │   ├── ExpandableChartModal.tsx, ChartLabels.tsx, ConnectorLines.tsx
+│       │   └── CopyableQuery.tsx, Tooltip.tsx, ErrorBoundary.tsx
 │       ├── data/
-│       │   ├── criterionTiers.ts     # Tier classification (F/BP/E)
+│       │   ├── criterionTiers.ts      # Tier classification (F/BP/E)
 │       │   ├── criterionImportance.ts # Importance descriptions
-│       │   ├── criterionRemediation.ts # Remediation descriptions
-│       │   ├── capSummaries.ts       # Capability one-liners
-│       │   └── appIcon.ts           # Embedded app icon data
+│       │   ├── criterionRemediation.ts# Remediation descriptions
+│       │   ├── appCapabilityMap.ts    # Dynatrace app id → capability
+│       │   ├── capSummaries.ts, appIcon.ts
 │       ├── hooks/
-│       │   ├── useCoverageData.ts   # Query engine + scoring
-│       │   ├── useAssessmentHistory.ts # Snapshot persistence
-│       │   └── usePreflight.ts      # Scope validation probes
+│       │   ├── useCoverageData.ts     # Query engine + scoring
+│       │   ├── useAppAdoption.ts      # Active users per capability (0 GB)
+│       │   ├── useScaleTier.ts        # Host count → tier, with override
+│       │   ├── usePreflight.ts        # Scope probes + span entitlement
+│       │   ├── useAssessmentHistory.ts# Snapshot persistence
+│       │   ├── useDavisRecommendations.ts, useAiReport.ts, useDevMode.ts
+│       ├── reports/
+│       │   ├── personaReports.ts      # Executive/Tactical/Technical/Custom
+│       │   └── aiNarrativePdf.ts      # Markdown answer → PDF
 │       ├── pages/
-│       │   ├── CoverageAssessment.tsx # Main assessment page (~2400 lines)
-│       │   └── ComparisonPage.tsx     # Evolution Over Time (~1150 lines)
-│       └── utils/
-│           └── colors.ts            # Shared color utilities
-└── docs/
-    └── ARCHITECTURE.md          # This file
+│       │   ├── CoverageAssessment.tsx # Main page (3 view modes)
+│       │   ├── ComparisonPage.tsx     # Evolution Over Time
+│       │   └── AiInsightsPage.tsx     # Davis insights (dev-gated)
+│       ├── utils/colors.ts            # Score bands
+│       └── perf/                      # Instrumentation + 24h query cache
+└── docs/                              # This file and friends
 ```
 
 ## Data Flow
@@ -90,7 +107,7 @@ cca-app/
 2. **Query Collection**: All 111 criteria from `queries.ts` are collected; their DQL queries are deduplicated (~94 unique queries).
 3. **Parallel Execution** (`useCoverageData.ts`): Up to 10 concurrent DQL queries via `queryExecutionClient.queryExecute()` with polling.
 4. **Scoring**: Each criterion produces a value (0–100%); values are compared against thresholds to produce pass/fail.
-5. **Aggregation**: Coverage score (simple average) and Maturity score (weighted + progressive) are computed per capability and overall.
+5. **Aggregation**: Coverage score (simple average) and Utilization score (weighted + progressive) are computed per capability and overall.
 6. **Snapshot**: Results are saved to localStorage (immediate) and Dynatrace Document Store (async).
 
 ### Query Types
@@ -101,6 +118,54 @@ cca-app/
 | **Cross-entity ratio** | Two queries (A/B) calculating coverage percentage | Services with DB spans / Total services × 100 |
 | **Timeseries** | Metric-based evaluation | `timeseries avg(dt.host.cpu.usage)` |
 
+## Cost and Fidelity Controls
+
+Three independent layers sit between a criterion and Grail. All of them rewrite
+the *executed* query while the **cache key stays the original catalog string**,
+so scoring, snapshots, cards and PDFs never see the difference.
+
+### Economy Mode (`scale-tier.ts`, every tier)
+A full run was measured at 370 GB of scan; it now runs at ~41 GB. Two levers,
+chosen per criterion:
+
+| Lever | Applied when | Measured effect |
+|---|---|---|
+| `samplingRatio: 1000` | **Both** sides of the ratio are plain counts over the same table and window | 2h of logs: 4.99 GB → ~0.003 GB, ratio drift < 1.5 pp |
+| Narrower window | Anything using `countDistinct` or `by:` grouping | 2h → 15m: 3.87 GB → 0.61 GB, keeps 94% of distinct sources |
+
+Sampling is never applied to distinct counts — measured, they collapse (log
+sources 63 → 28, AI providers 4 → 1). It is also never applied when one side is
+an exact entity count, or to single-query criteria compared to an absolute
+threshold, because in both cases the sampling would not cancel. Criteria whose
+two sides deliberately read different windows are divided by the same factor so
+the ratio they encode survives.
+
+### Scale Tier (`scale-tier.ts`, above 5k hosts)
+Narrows the window further (30m / 5m) so very large tenants finish inside the
+Grail per-query timeout. Orthogonal to Economy Mode, which runs on top.
+
+### Trace Proxy Mode (`trace-proxy.ts`)
+For tenants without the Traces-on-Grail entitlement: span checks are replaced by
+validated metric/topology equivalents, and the checks with no honest proxy are
+**excluded from the denominator** rather than counted as failures. AI
+Observability is excluded as a whole capability — `gen_ai.*` exists only on
+spans. Side effect: the replacements are metric/entity queries, which measured
+zero scan, so proxy mode is cheaper than a normal run.
+
+Every one of these is disclosed in the UI — `CostModeNote`, `ScaleTierBanner`
+and `TraceProxyBanner` — because a viewer should never read an estimated score
+without knowing it is one.
+
+## App Adoption
+
+`useAppAdoption.ts` counts distinct `user.email` per `DT_APP_ID` in
+`dt.system.events`, maps app ids to capabilities via `data/appCapabilityMap.ts`
+and reports penetration against all active platform users. It reads a system
+table, so it measured **0 GB scanned**. It is reported beside coverage and
+**never feeds a score**. Honest limits, surfaced rather than hidden: only apps
+that run DQL appear, API traffic has no `client.source`, and it measures
+platform usage rather than data usage.
+
 ## Scoring Model
 
 ### Coverage Score
@@ -110,7 +175,7 @@ capScore = (passed criteria / total criteria) × 100
 overallScore = average(all capability scores)
 ```
 
-### Maturity Score (Progressive Weighted)
+### Utilization Score (Progressive Weighted)
 
 **Weights:** Foundation = 60%, Best Practice = 25%, Excellence = 15%
 
@@ -121,10 +186,10 @@ overallScore = average(all capability scores)
 ```
 effB = (foundationPct >= 0.8) ? bestPracticePct : 0
 effE = (effB >= 0.6) ? excellencePct : 0
-maturityScore = foundationPct × 60 + effB × 25 + effE × 15
+utilizationScore = foundationPct × 60 + effB × 25 + effE × 15
 ```
 
-### Maturity Levels
+### Utilization Levels
 
 | Level | Label | Condition |
 |---|---|---|
@@ -133,7 +198,7 @@ maturityScore = foundationPct × 60 + effB × 25 + effE × 15
 | L2 | Operational | Foundation = 100% AND Best Practice ≥ 50% |
 | L3 | Optimized | Foundation = 100% AND Best Practice = 100% AND Excellence ≥ 50% |
 
-### Maturity Bands
+### Utilization Bands
 
 | Band | Score Range |
 |---|---|
@@ -167,25 +232,41 @@ maturityScore = foundationPct × 60 + effB × 25 + effE × 15
 
 ### Routing
 ```
-/        → CoverageAssessment (lazy-loaded)
-/compare → ComparisonPage (lazy-loaded)
+/            → CoverageAssessment (lazy-loaded)
+/compare     → ComparisonPage (lazy-loaded)
+/ai-insights → AiInsightsPage (lazy-loaded, dev-gated)
 ```
 
-Both routes wrapped in `<ErrorBoundary>` with `<Suspense>`.
+All routes wrapped in `<ErrorBoundary>` with `<Suspense>`.
 
 ### View Modes (CoverageAssessment)
 
 | Mode | Description |
 |---|---|
-| **Coverage** | Interactive polar radar chart + capability cards with pass/fail criteria |
-| **Maturity** | Tier-grouped cards (Foundation/Best Practice/Excellence) with weighted scores |
-| **Executive Summary** | Prioritized recommendations with remediation actions |
+| **Coverage** | Interactive polar radar chart + capability cards. Criterion rows show met / not met; the measured value lives in the expanded detail beside its threshold |
+| **Utilization** | Tier-grouped cards (Foundation/Best Practice/Excellence) with weighted scores, plus an **Adoption** row per capability (users and penetration) |
+| **Executive Summary** | Headline Coverage / Utilization / Adoption, achievements vs gaps, a **Coverage-only radar**, and a **Capability Map** (coverage bars + utilization line) |
 
 ### PDF Report Generation
-Three report types via jsPDF:
-- **Summary Report**: Coverage vs Maturity side-by-side
-- **Coverage Report**: Detailed criterion pass/fail per capability
-- **Maturity Report**: Tier-grouped breakdown with F/BP/E sections
+Client-side via jsPDF (`reports/personaReports.ts`), each in English, Portuguese
+and Spanish:
+
+- **Executive** — posture, strengths and exposures, quick wins, path to the next
+  stage, improvements grouped **by team** (never by date)
+- **Tactical** — gap landscape, improvement potential by team, capability board,
+  operating cadence
+- **Technical** — full check detail with the DQL behind every criterion
+- **Custom** — the user picks title, capabilities and sections
+- **Smart (Assist)** — free-text request answered by Davis CoPilot, rendered
+  through `reports/aiNarrativePdf.ts` (dev-gated)
+
+Reports embed the app's own charts as images. Charts are exported as JPEG
+rather than PNG — on gradient-heavy canvases that is ~20x smaller, which took
+one report from 12.4 MB to a manageable size. Percentages are used throughout;
+the reports never speak in "points".
+
+Two constraints worth knowing: jsPDF's WinAnsi fonts cannot render ✓ ✗ ≈ ≥ →,
+so the generators use OK/GAP/ERR, `~`, `>=` and `->`.
 
 ### Theming
 Full dark/light mode via Strato design tokens (`useCurrentTheme()`). All components adapt dynamically.

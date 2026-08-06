@@ -7,7 +7,7 @@ function hexToRgb(h: string) { return { r: parseInt(h.slice(1, 3), 16), g: parse
 function rgba(c: { r: number; g: number; b: number }, a: number) { return `rgba(${c.r},${c.g},${c.b},${a})`; }
 function lighten(c: { r: number; g: number; b: number }, v: number) { return { r: Math.min(255, c.r + v), g: Math.min(255, c.g + v), b: Math.min(255, c.b + v) }; }
 
-export function maturity(s: number) { return scoreBand(s); }
+export function utilization(s: number) { return scoreBand(s); }
 
 const R_RATIO = 0.34;
 
@@ -98,7 +98,7 @@ export const TechRadar: React.FC<Props> = React.memo(({ capabilities, anim, acti
 
     // ── Center hub (drawn before blips so blips appear on top) ──
     const avg = Math.round(capabilities.reduce((a, c) => a + c.score, 0) / N * anim);
-    const ml = maturity(Math.round(capabilities.reduce((a, c) => a + c.score, 0) / N));
+    const ml = utilization(Math.round(capabilities.reduce((a, c) => a + c.score, 0) / N));
     ctx.beginPath(); ctx.arc(cx, cy, hR + 6, 0, Math.PI * 2);
     ctx.strokeStyle = dk ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.035)";
     ctx.lineWidth = 0.5; ctx.stroke();
@@ -137,7 +137,7 @@ export const TechRadar: React.FC<Props> = React.memo(({ capabilities, anim, acti
       const bx = cx + Math.cos(midA) * blipR;
       const by = cy + Math.sin(midA) * blipR;
       const b = hexToRgb(cap.color);
-      const ml = maturity(cap.score);
+      const ml = utilization(cap.score);
       const mlb = hexToRgb(ml.color);
       const dotSize = act ? Math.max(size * 0.022, 12) : Math.max(size * 0.016, 9);
 
@@ -266,7 +266,7 @@ export function renderTechRadarToDataURL(
 
   // ── Center hub ──
   const avg = Math.round(capabilities.reduce((a, c) => a + c.score, 0) / N);
-  const ml = maturity(avg);
+  const ml = utilization(avg);
   ctx.beginPath(); ctx.arc(cx, cy, hR + 6, 0, Math.PI * 2);
   ctx.strokeStyle = dk ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.035)";
   ctx.lineWidth = 0.5; ctx.stroke();
@@ -299,7 +299,7 @@ export function renderTechRadarToDataURL(
     const bx = cx + Math.cos(midA) * blipR;
     const by = cy + Math.sin(midA) * blipR;
     const b = hexToRgb(cap.color);
-    const bml = maturity(cap.score);
+    const bml = utilization(cap.score);
     const mlb = hexToRgb(bml.color);
     const dotSize = dotSizeBase;
 
@@ -337,7 +337,7 @@ export function renderTechRadarToDataURL(
     const midA = i * SEG + SEG / 2 - Math.PI / 2;
     const cos = Math.cos(midA), sin = Math.sin(midA);
     const isR = cos > 0.15, isL = cos < -0.15;
-    const bml = maturity(cap.score);
+    const bml = utilization(cap.score);
     const blipR = hubR + (cap.score / 100) * (R - hubR);
     const blipDot = dotSizeBase;
     const startR = blipR + blipDot + 4;

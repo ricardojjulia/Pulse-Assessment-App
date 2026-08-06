@@ -1,0 +1,48 @@
+flowchart LR
+    subgraph UI["Presentation"]
+        direction TB
+        APP[App.tsx<br/>routes + ErrorBoundary]
+        PAGES[pages/<br/>CoverageAssessment<br/>ComparisonPage]
+        COMP[components/<br/>TechRadar - canvas<br/>CapabilityCards<br/>DpsCostBadge<br/>ScaleTierBanner]
+    end
+
+    subgraph HOOKS["Hooks - state + side effects"]
+        direction TB
+        UCD[useCoverageData<br/>orchestrates queries]
+        UST[useScaleTier<br/>auto-detects host count]
+        UDM[useDevMode<br/>SE gating ?dev=1]
+        UAH[useAssessmentHistory<br/>Document Store CRUD]
+    end
+
+    subgraph LOGIC["Domain logic"]
+        direction TB
+        QRY[queries.ts<br/>~94 criteria + thresholds]
+        TIERS[criterionTiers.ts<br/>tier classification]
+        ST[scale-tier.ts<br/>tier decision rules]
+        UTIL[utils/colors.ts<br/>SCORE_BANDS]
+    end
+
+    subgraph PERF["Performance"]
+        direction TB
+        CACHE[queryCache.ts<br/>24h Doc Store cache]
+        REPORT[buildReport.ts<br/>perf JSON export]
+        TYPES[types.ts<br/>PerfReport schema]
+    end
+
+    subgraph SDK["Dynatrace SDKs"]
+        direction TB
+        QEC[queryExecutionClient<br/>DQL -> Grail]
+        DOC[client-document<br/>persistence]
+    end
+
+    UI --> HOOKS
+    HOOKS --> LOGIC
+    HOOKS --> PERF
+    HOOKS --> SDK
+    PERF --> SDK
+
+    style UI fill:#3B82F615
+    style HOOKS fill:#8B5CF615
+    style LOGIC fill:#10B98115
+    style PERF fill:#F59E0B15
+    style SDK fill:#EC489915

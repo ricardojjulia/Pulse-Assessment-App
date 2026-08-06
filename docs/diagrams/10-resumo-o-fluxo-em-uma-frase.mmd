@@ -1,0 +1,16 @@
+flowchart LR
+    A[~94 criteria DQL] --> B[Scale Tier<br/>auto-sample]
+    B --> C[Cache 24h<br/>doc store]
+    C --> D[Execute on Grail]
+    D --> E[ratio = A/B x 100]
+    E --> F[pass / fail vs threshold]
+    F --> G[Coverage avg]
+    F --> H[Maturity tier-weighted]
+    G --> I[Radar UI]
+    H --> I
+
+    style A fill:#3B82F6,color:#fff
+    style B fill:#F59E0B,color:#fff
+    style C fill:#10B981,color:#fff
+    style D fill:#EC4899,color:#fff
+    style I fill:#8B5CF6,color:#fff

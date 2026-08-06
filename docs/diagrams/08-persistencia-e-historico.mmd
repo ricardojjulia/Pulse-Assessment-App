@@ -1,0 +1,26 @@
+flowchart LR
+    subgraph CLIENT[Browser - React App]
+        S[useState<br/>resultado atual]
+        H[useAssessmentHistory<br/>snapshots]
+        QC[QueryCache<br/>memoria]
+    end
+
+    subgraph DT[Dynatrace platform]
+        DS[Document Store<br/>app-scoped]
+        GRAIL[Grail<br/>logs/spans/metrics/<br/>events/entities]
+    end
+
+    QC <--->|hit/miss| DS
+    H <--->|load/save| DS
+    S -->|run starts| Q[DQL exec]
+    Q -->|fetch from| GRAIL
+    Q -->|results| S
+    S -->|user saves| H
+
+    DS -.contains.-> QC_CACHE[Cache entries<br/>name: cache:tier:hash<br/>24h TTL]
+    DS -.contains.-> SNAPSHOTS[Snapshots<br/>name: snapshot:&lt;ts&gt;<br/>full result + scores]
+
+    style GRAIL fill:#EC4899,color:#fff
+    style DS fill:#3B82F6,color:#fff
+    style CLIENT fill:#10B98115
+    style DT fill:#F59E0B15

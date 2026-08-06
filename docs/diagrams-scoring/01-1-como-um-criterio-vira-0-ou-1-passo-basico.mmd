@@ -1,0 +1,32 @@
+flowchart TD
+    A[Criterion definition<br/>id, query, queryB, thresholds] --> B[Execute DQL]
+    B --> C{Has<br/>denominator?}
+
+    C -->|queryB exists| D[Run queryB<br/>get denom]
+    C -->|denominatorConstant| E[Use code-level constant]
+    C -->|no denom| F[query result<br/>IS the percentage]
+
+    D --> G{denom > 0?}
+    E --> G
+
+    G -->|Yes| H[value = numerator / denom x 100<br/>capped at 100]
+    G -->|No| I[Smart-skip C3<br/>value = 0<br/>flagged as skipped]
+
+    F --> J[value already a percentage]
+    H --> J
+    I --> J
+
+    J --> K[Compare vs thresholds<br/>e.g. ≥90 ≥50 ≥1]
+    K --> L{Meets ANY<br/>threshold?}
+
+    L -->|Yes| M[points = 1<br/>PASSED]
+    L -->|No| N[points = 0<br/>FAILED]
+
+    M --> O[CriterionResult<br/>id, value, points, tier]
+    N --> O
+
+    style A fill:#3B82F6,color:#fff
+    style K fill:#8B5CF6,color:#fff
+    style M fill:#10B981,color:#fff
+    style N fill:#EF4444,color:#fff
+    style I fill:#F59E0B,color:#fff

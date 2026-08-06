@@ -4,7 +4,7 @@ import Colors from "@dynatrace/strato-design-tokens/colors";
 import { Flex } from "@dynatrace/strato-components/layouts";
 import { Text } from "@dynatrace/strato-components/typography";
 import type { CapabilityResult } from "../hooks/useCoverageData";
-import { maturity } from "./TechRadar";
+import { utilization } from "./TechRadar";
 
 const R_RATIO = 0.34;
 
@@ -33,7 +33,7 @@ export const ChartLabels: React.FC<Props> = React.memo(({ capabilities, anim, ac
         const isR = cos > 0.15, isL = cos < -0.15;
         const act = activeIdx === i, dim = activeIdx !== null && !act;
         const sv = Math.round(cap.score * anim);
-        const ml = maturity(cap.score);
+        const ml = utilization(cap.score);
 
         return (
           <Flex key={i} flexDirection="column" style={{

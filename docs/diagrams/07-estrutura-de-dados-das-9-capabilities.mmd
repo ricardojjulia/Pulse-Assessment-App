@@ -1,0 +1,26 @@
+flowchart TD
+    A[CAPABILITIES array<br/>9 capabilities] --> B1[1. Infrastructure<br/>22 criteria<br/>color #3B82F6]
+    A --> B2[2. Application Obs<br/>13 criteria<br/>color #8B5CF6]
+    A --> B3[3. Digital Experience<br/>11 criteria<br/>color #EC4899]
+    A --> B4[4. Log Analytics<br/>8 criteria<br/>color #F59E0B]
+    A --> B5[5. App Security<br/>5 criteria<br/>color #EF4444]
+    A --> B6[6. Threat Obs<br/>4 criteria<br/>color #F97316]
+    A --> B7[7. AI Observability<br/>9 criteria<br/>color #06B6D4]
+    A --> B8[8. Business Obs<br/>4 criteria<br/>color #10B981]
+    A --> B9[9. Software Delivery<br/>5 criteria<br/>color #6366F1]
+
+    B1 --> C[Cada criterio]
+    B2 --> C
+    B3 --> C
+    B7 --> C
+
+    C --> D[id: a1, i12, ...]
+    C --> E[label: human-readable]
+    C --> F[description: tooltip]
+    C --> G[query: DQL numerator]
+    C --> H[queryB ou denominatorConstant]
+    C --> I[thresholds array]
+    C --> J[tier: foundation/<br/>bestPractice/excellence]
+
+    style A fill:#1B3A8A,color:#fff
+    style C fill:#8B5CF6,color:#fff

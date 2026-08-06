@@ -1,0 +1,43 @@
+flowchart TD
+    A[Criterion def<br/>id, label, query, queryB,<br/>thresholds, tier] --> B{Has queryB<br/>or denominatorConstant?}
+
+    B -->|queryB| C[Execute query A<br/>via DQL]
+    B -->|queryB| D[Execute query B<br/>via DQL]
+    B -->|constant| C2[Execute query A]
+    B -->|constant| E[denominator =<br/>code-level constant]
+    B -->|no| F[Execute query A<br/>result IS the %]
+
+    C --> G[valueA = result]
+    D --> H[denom = result]
+    C2 --> G2[valueA = result]
+    E --> H2[denom = constant]
+    F --> I[value = result]
+
+    G --> J{denom > 0?}
+    H --> J
+    G2 --> J2{denom > 0?}
+    H2 --> J2
+
+    J -->|Yes| K[value = valueA / denom x 100<br/>capped at 100]
+    J -->|No| L[Smart skip C3<br/>value = 0, skipped flag]
+    J2 -->|Yes| K2[value = valueA / denom x 100]
+    J2 -->|No| L
+
+    K --> M[Compare vs thresholds<br/>e.g. ≥90 ≥50 ≥1]
+    K2 --> M
+    I --> M
+    L --> N[points = 0, error = false]
+
+    M --> O{Threshold met?}
+    O -->|Yes| P[points = 1<br/>passed]
+    O -->|No| Q[points = 0<br/>not met]
+
+    P --> R[CriterionResult]
+    Q --> R
+    N --> R
+
+    style A fill:#3B82F6,color:#fff
+    style M fill:#8B5CF6,color:#fff
+    style P fill:#10B981,color:#fff
+    style Q fill:#EF4444,color:#fff
+    style L fill:#F59E0B,color:#fff

@@ -64,7 +64,7 @@ export const Overview: React.FC<OverviewProps> = ({ coverageData, snapshots }) =
                 downloadCompleteMarkdownReport({
                   capabilities: coverageData.capabilities,
                   totalScore: coverageData.totalScore,
-                  overallMaturityLevel: coverageData.overallMaturityLevel,
+                  overallUtilizationLevel: coverageData.overallUtilizationLevel,
                   tenant: coverageData.tenant,
                   date: coverageData.date,
                   stats: coverageData.stats,

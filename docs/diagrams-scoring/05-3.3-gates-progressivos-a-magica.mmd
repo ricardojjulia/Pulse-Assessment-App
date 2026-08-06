@@ -1,0 +1,25 @@
+flowchart TD
+    A[fPct, bPct, ePct] --> B{fPct >= 0.8?}
+
+    B -->|Yes - foundation solida| C[effB = bPct<br/>BP CONTA]
+    B -->|No - foundation fraca| D[effB = 0<br/>BP zerado]
+
+    C --> E{effB >= 0.6?}
+    D --> E
+
+    E -->|Yes - BP solido| F[effE = ePct<br/>Excellence CONTA]
+    E -->|No - BP fraco| G[effE = 0<br/>Excellence zerado]
+
+    F --> H[maturityScore =<br/>fPct x 60 +<br/>effB x 25 +<br/>effE x 15]
+    G --> H
+
+    H --> I[Round para inteiro 0-100]
+
+    I --> J[Banda<br/>≥80 Excellent<br/>≥60 Good<br/>≥40 Moderate<br/>≥20 Low<br/>&lt;20 N/A]
+
+    style B fill:#F59E0B,color:#fff
+    style E fill:#F59E0B,color:#fff
+    style D fill:#EF4444,color:#fff
+    style G fill:#EF4444,color:#fff
+    style H fill:#8B5CF6,color:#fff
+    style J fill:#10B981,color:#fff

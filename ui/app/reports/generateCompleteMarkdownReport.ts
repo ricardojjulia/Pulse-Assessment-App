@@ -10,7 +10,7 @@ import type { TenantOverview } from "../tenantReview/types/review.types";
 export interface CompleteMarkdownReportInput {
   capabilities: CapabilityResult[];
   totalScore: number;
-  overallMaturityLevel: number;
+  overallUtilizationLevel: number;
   tenant: string;
   date: string;
   stats: QueryStats | null;
@@ -55,10 +55,10 @@ function appendCurrentAssessment(lines: string[], capabilities: CapabilityResult
       `- Effective score: **${capability.score}/100**`,
       `- Raw score: **${capability.rawScore}/100**`,
       `- Consolidation: **${capability.consolidation}%**`,
-      `- Maturity: **${capability.maturity.levelLabel} (${capability.effectiveMaturityScore}/100)**`,
-      `- Foundation checks: **${capability.maturity.foundation.passed}/${capability.maturity.foundation.total}**`,
-      `- Best Practice checks: **${capability.maturity.bestPractice.passed}/${capability.maturity.bestPractice.total}**`,
-      `- Excellence checks: **${capability.maturity.excellence.passed}/${capability.maturity.excellence.total}**`,
+      `- Utilization: **${capability.utilization.levelLabel} (${capability.effectiveUtilizationScore}/100)**`,
+      `- Foundation checks: **${capability.utilization.foundation.passed}/${capability.utilization.foundation.total}**`,
+      `- Best Practice checks: **${capability.utilization.bestPractice.passed}/${capability.utilization.bestPractice.total}**`,
+      `- Excellence checks: **${capability.utilization.excellence.passed}/${capability.utilization.excellence.total}**`,
       "",
     );
 
@@ -219,7 +219,7 @@ export function buildCompleteMarkdownReport(input: CompleteMarkdownReportInput):
     "## Executive Summary",
     "",
     `- Overall assessment score: **${input.totalScore}/100**`,
-    `- Overall maturity level: **${input.overallMaturityLevel}**`,
+    `- Overall utilization level: **${input.overallUtilizationLevel}**`,
     `- Capabilities assessed: **${input.capabilities.length}**`,
     `- Criteria passing: **${passingCriteria}/${totalCriteria}**`,
     `- Historical assessments included: **${input.snapshots.length}**`,

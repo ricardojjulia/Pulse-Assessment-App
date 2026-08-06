@@ -1,0 +1,17 @@
+flowchart LR
+    A[~94 criteria<br/>each: passed or failed] --> B[Per capability]
+
+    B --> C["Coverage<br/>simple average<br/>passed/total x 100"]
+    B --> D["Maturity<br/>tier-weighted<br/>F x 60% + BP x 25% + E x 15%<br/>(gated progressive)"]
+
+    C --> E[Total Coverage<br/>avg of 9 capabilities]
+    D --> F[Total Maturity<br/>avg of 9 capabilities]
+
+    E --> G[Header score<br/>radar bands]
+    F --> H[Capability cards<br/>L0-L3 badge]
+
+    style A fill:#3B82F6,color:#fff
+    style C fill:#5EB1A9,color:#fff
+    style D fill:#EC4899,color:#fff
+    style G fill:#10B981,color:#fff
+    style H fill:#EEA746,color:#fff

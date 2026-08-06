@@ -1,0 +1,22 @@
+flowchart TD
+    A[9 capabilities<br/>cada uma com<br/>coverage + maturity] --> B[Excluir capabilities<br/>que o usuario desmarcou]
+
+    B --> C[Aplicar consolidation factor<br/>opcional - default 100%]
+
+    C --> D{Consolidation < 100<br/>para alguma capability?}
+
+    D -->|Yes| E[adjScore =<br/>rawScore x factor / 100]
+    D -->|No| F[score = rawScore]
+
+    E --> G[Coverage medio<br/>sum scores / count]
+    F --> G
+
+    C --> H[Maturity medio<br/>sum maturityScores / count]
+
+    G --> I[totalScore<br/>shown in header]
+    H --> J[overallMaturityLevel<br/>used for export]
+
+    style A fill:#3B82F6,color:#fff
+    style E fill:#F59E0B,color:#fff
+    style I fill:#10B981,color:#fff
+    style J fill:#EC4899,color:#fff

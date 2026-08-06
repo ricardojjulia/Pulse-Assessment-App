@@ -1,0 +1,41 @@
+flowchart LR
+    subgraph IN[Inputs do usuario]
+        T[Capabilities<br/>desmarcadas]
+        C[Consolidation<br/>factors]
+    end
+
+    subgraph DATA[Vem do tenant]
+        DQL[Resultados DQL]
+        HOSTS[Host count<br/>via Scale Tier]
+    end
+
+    subgraph CALC[Calculo]
+        TH[Thresholds<br/>hardcoded]
+        TIER[Tier classification<br/>hardcoded]
+        W[Weights 60/25/15<br/>hardcoded]
+    end
+
+    subgraph OUT[Outputs]
+        COV[Coverage]
+        MAT[Maturity]
+        LVL[Level L0-L3]
+    end
+
+    DQL --> COV
+    DQL --> MAT
+    DQL --> LVL
+    TH --> COV
+    TH --> MAT
+    TH --> LVL
+    TIER --> MAT
+    TIER --> LVL
+    W --> MAT
+    T --> COV
+    T --> MAT
+    C --> COV
+    C --> MAT
+    HOSTS -.affects.-> DQL
+
+    style COV fill:#3B82F6,color:#fff
+    style MAT fill:#EC4899,color:#fff
+    style LVL fill:#10B981,color:#fff

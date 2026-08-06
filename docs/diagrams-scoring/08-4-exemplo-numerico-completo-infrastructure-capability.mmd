@@ -1,0 +1,18 @@
+flowchart TD
+    A[fPct = 1.00<br/>bPct = 0.55<br/>ePct = 0.38] --> B{fPct >= 0.8?<br/>1.00 >= 0.8 SIM}
+
+    B -->|Yes| C[effB = 0.55<br/>BP conta]
+
+    C --> D{effB >= 0.6?<br/>0.55 >= 0.6 NAO}
+
+    D -->|No| E[effE = 0<br/>Excellence zerado!]
+
+    E --> F[maturityScore =<br/>1.00 x 60 + 0.55 x 25 + 0 x 15<br/>= 60 + 13.75 + 0<br/>= 73.75]
+
+    F --> G[Math.round -> 74]
+    G --> H[Banda: Good<br/>60-80]
+
+    style A fill:#3B82F6,color:#fff
+    style E fill:#EF4444,color:#fff
+    style F fill:#8B5CF6,color:#fff
+    style H fill:#5EB1A9,color:#fff

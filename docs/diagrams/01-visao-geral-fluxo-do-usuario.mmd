@@ -1,0 +1,30 @@
+flowchart TD
+    A([User opens Pulse]) --> B{Has saved<br/>snapshot?}
+    B -->|Yes| C[Show last snapshot<br/>+ radar]
+    B -->|No| D[Idle state<br/>capability picker]
+    C --> E[User clicks Run]
+    D --> E
+    E --> F[useCoverageData.start]
+    F --> G[Detect Scale Tier]
+    G --> H[Build DQL queries<br/>scaleQuery for each criterion]
+    H --> I{Cache hit?}
+    I -->|Yes| J[Reuse cached result<br/>0 GB scanned, $0]
+    I -->|No| K[Execute DQL<br/>via SDK queryExecutionClient]
+    K --> L[Record perf<br/>bytes, ms, records]
+    J --> M[Compute criterion<br/>numerator / denominator x 100]
+    L --> M
+    M --> N[Compare vs thresholds<br/>pass = 1, fail = 0]
+    N --> O[Aggregate per capability]
+    O --> P[Compute Coverage score<br/>pass / total x 100]
+    O --> Q[Compute Maturity score<br/>weighted by tier]
+    P --> R[Render radar + cards]
+    Q --> R
+    R --> S[Save snapshot to<br/>Document Store]
+    R --> T[DPS cost badge<br/>USD per GB scanned]
+
+    style F fill:#3B82F6,color:#fff
+    style I fill:#10B981,color:#fff
+    style M fill:#8B5CF6,color:#fff
+    style P fill:#F59E0B,color:#fff
+    style Q fill:#EC4899,color:#fff
+    style T fill:#06B6D4,color:#fff

@@ -1,0 +1,45 @@
+flowchart TD
+    A[Capability com<br/>N criterios] --> B[Cada criterio:<br/>points = 0 ou 1]
+
+    B --> C[Classifica por tier<br/>via CRITERION_TIERS]
+    C --> D[Foundation<br/>~3-4 criterios]
+    C --> E[Best Practice<br/>~4-5 criterios]
+    C --> F[Excellence<br/>~2-3 criterios]
+
+    B -.-> G[COVERAGE SCORE]
+    G --> H[passed = sum points]
+    H --> I[score = passed / N x 100]
+    I --> J[Renderiza no RADAR]
+
+    D --> K[fPct = passed/total]
+    E --> L[bPct = passed/total]
+    F --> M[ePct = passed/total]
+
+    K --> N{fPct ≥ 0.8?}
+    N -->|Yes| O[effB = bPct]
+    N -->|No| P[effB = 0]
+
+    O --> Q{effB ≥ 0.6?}
+    P --> Q
+    Q -->|Yes| R[effE = ePct]
+    Q -->|No| S[effE = 0]
+
+    R --> T[maturityScore =<br/>fPct x 60 +<br/>effB x 25 +<br/>effE x 15]
+    S --> T
+
+    T --> U[Maturity Band<br/>≥80 Excellent<br/>≥60 Good<br/>≥40 Moderate<br/>≥20 Low<br/>&lt;20 N/A]
+    T --> V[Maturity Level<br/>L0/L1/L2/L3]
+
+    K --> V
+    L --> V
+    M --> V
+
+    V --> W[Renderiza nos CARDS]
+    U --> W
+
+    style G fill:#3B82F6,color:#fff
+    style T fill:#EC4899,color:#fff
+    style N fill:#F59E0B,color:#fff
+    style Q fill:#F59E0B,color:#fff
+    style J fill:#10B981,color:#fff
+    style W fill:#10B981,color:#fff

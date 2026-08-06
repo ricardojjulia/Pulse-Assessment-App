@@ -38,7 +38,9 @@
       { "name": "document:documents:delete", "comment": "Cleanup old snapshots" },
       { "name": "document:environment-shares:read", "comment": "Read document sharing status" },
       { "name": "document:direct-shares:read", "comment": "List direct document shares" },
-      { "name": "document:trash.documents:read", "comment": "List trashed documents" }
+      { "name": "document:trash.documents:read", "comment": "List trashed documents" },
+      { "name": "davis-copilot:conversations:execute", "comment": "Davis CoPilot dynamic recommendations (feat/davis-insights)" },
+      { "name": "storage:filter-segments:read", "comment": "Read platform Segments to identify teams/scopes on Projects" }
     ]
   }
 }

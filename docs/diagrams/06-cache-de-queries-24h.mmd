@@ -1,0 +1,33 @@
+flowchart TD
+    A[executeAllUnique<br/>recebe 94 queries] --> B[Para cada query]
+    B --> C[hash = FNV-32 do DQL]
+    C --> D[cacheKey =<br/>tier:hash:windowHours]
+
+    D --> E{Tem em<br/>memoria?}
+    E -->|Yes| F[Return cached]
+    E -->|No| G{Tem no<br/>Document Store?}
+
+    G -->|Yes| H[Load + cache memoria<br/>cacheHit++]
+    G -->|No| I[Execute DQL<br/>cacheMiss++]
+
+    H --> J[ageMs < 24h?]
+    J -->|Yes| K[Use cached<br/>scannedBytes = 0]
+    J -->|No| I
+
+    I --> L[Result obtido]
+    L --> M[Store em memoria]
+    L --> N[Enqueue persist]
+
+    F --> O[Aggregate result]
+    K --> O
+    M --> O
+
+    N -.-> P[Apos run termina:<br/>persistentCache.flush]
+    P --> Q[Batch write ao<br/>Document Store]
+
+    O --> R[Score computation]
+
+    style E fill:#10B981,color:#fff
+    style G fill:#10B981,color:#fff
+    style I fill:#EF4444,color:#fff
+    style K fill:#10B981,color:#fff

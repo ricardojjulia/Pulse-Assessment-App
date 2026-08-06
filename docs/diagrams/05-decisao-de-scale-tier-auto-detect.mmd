@@ -1,0 +1,38 @@
+flowchart TD
+    A[useScaleTier hook<br/>inicia no boot] --> B[Query rapida:<br/>fetch dt.entity.host<br/>summarize count]
+    B --> C[hostCount conhecido]
+
+    C --> D{Manual override<br/>via URL ?tier=?}
+    D -->|Yes| E[tier = override<br/>autoTier = false]
+    D -->|No| F{hostCount < 1000?}
+
+    F -->|Yes| G[tier = exact<br/>autoTier = true]
+    F -->|No| H{hostCount < 10000?}
+    H -->|Yes| I[tier = large<br/>autoTier = true]
+    H -->|No| J[tier = xlarge<br/>autoTier = true]
+
+    E --> K[scaleQuery applies tier]
+    G --> K
+    I --> K
+    J --> K
+
+    K --> L{tier == exact?}
+    L -->|Yes| M[Query unchanged<br/>full window, no scanLimit]
+
+    K --> N{tier == large?}
+    N -->|Yes| O[Add scanLimitGBytes: 500<br/>Narrow window where applicable]
+
+    K --> P{tier == xlarge?}
+    P -->|Yes| Q[Add scanLimitGBytes: 100<br/>Narrow window aggressively<br/>Show ≈ prefix in UI]
+
+    M --> R[Execute DQL]
+    O --> R
+    Q --> R
+
+    R --> S[Render ScaleTierBanner<br/>shows tier + host count<br/>warning if sampling active]
+
+    style A fill:#3B82F6,color:#fff
+    style F fill:#F59E0B,color:#fff
+    style H fill:#F59E0B,color:#fff
+    style J fill:#EF4444,color:#fff
+    style S fill:#06B6D4,color:#fff

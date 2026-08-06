@@ -38,3 +38,9 @@ Thumbs.db
 # app-settings plugin local files
 /settings/local-mock-data/secrets.json
 /settings/local-mock-data/persistence/
+
+# Field asset library metadata. Its `tenant_url` field is REQUIRED by the
+# library and is the one place an environment URL is allowed — which is the
+# opposite of this repo's rule. Kept local; the committed copy lives in the
+# field-asset-library submission, not here.
+meta.yaml

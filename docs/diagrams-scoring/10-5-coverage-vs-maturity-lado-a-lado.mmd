@@ -1,0 +1,25 @@
+flowchart TB
+    subgraph SAME[Mesmos 22 criterios da Infrastructure]
+        A[12 / 22 passed<br/>Foundation 3/3<br/>BP 6/11<br/>Excellence 3/8]
+    end
+
+    SAME --> COV[Coverage path]
+    SAME --> MAT[Maturity path]
+
+    subgraph COV[COVERAGE]
+        C1[Conta tudo igual]
+        C2[12 / 22 x 100]
+        C3[= 55<br/>banda Moderate]
+    end
+
+    subgraph MAT[MATURITY]
+        M1[Foundation x 60% peso]
+        M2[BP x 25% peso<br/>se F >= 80%]
+        M3[Excellence x 15% peso<br/>se BP >= 60%]
+        M4[60 + 13.75 + 0]
+        M5[= 74<br/>banda Good]
+    end
+
+    style A fill:#3B82F6,color:#fff
+    style C3 fill:#EEA746,color:#fff
+    style M5 fill:#5EB1A9,color:#fff

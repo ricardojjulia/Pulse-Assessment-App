@@ -1,8 +1,8 @@
 # Pulse Assessment
 
-> Automated observability coverage and maturity assessment for Dynatrace environments.
+> Automated observability coverage and utilization assessment for Dynatrace environments.
 
-Pulse Assessment is a native **Dynatrace App** that evaluates your environment's observability posture across **9 capabilities** and **111 criteria** using real-time DQL queries against Grail. It provides dual-dimension scoring (Coverage + Maturity), guided remediation, historical snapshots, and PDF reporting.
+Pulse Assessment is a native **Dynatrace App** that evaluates your environment's observability posture across **9 capabilities** and **111 criteria** using real-time DQL queries against Grail. It provides dual-dimension scoring (Coverage + Utilization), guided remediation, historical snapshots, and PDF reporting.
 
 ---
 
@@ -11,14 +11,18 @@ Pulse Assessment is a native **Dynatrace App** that evaluates your environment's
 - **Automated Assessment** — Executes ~94 unique DQL queries (111 criteria with cross-entity ratios) against your Dynatrace tenant
 - **Dual Scoring Dimensions**
   - **Coverage** — Percentage of criteria passing thresholds (simple pass/fail ratio)
-  - **Maturity** — Weighted progressive scoring across Foundation (60%), Best Practice (25%), and Excellence (15%) tiers with gating rules
+  - **Utilization** — Weighted progressive scoring across Foundation (60%), Best Practice (25%), and Excellence (15%) tiers with gating rules
 - **Interactive Radar Chart** — Canvas-rendered polar chart with hover tooltips and click-to-drill-down
-- **3 View Modes** — Coverage, Maturity, and Executive Summary (Recommendations)
+- **3 View Modes** — Coverage, Utilization, and Executive Summary
+- **Executive Summary** — Headline Coverage / Utilization / Adoption, a Coverage-only radar, and a Capability Map pairing coverage bars with a utilization line
 - **Guided Remediation** — Specific actions and documentation links for every unmet criterion
 - **Historical Snapshots** — Auto-saved to Dynatrace Document Store with up to 12 snapshots retained
 - **Evolution Over Time** — A/B comparison of any two snapshots with delta analysis per capability and criterion
-- **PDF Reports** — Three report types: Summary, Coverage Detail, and Maturity Detail (dark-themed A4)
-- **Preflight Validation** — Verifies all 7 API scopes before running the assessment
+- **App Adoption** — Distinct users opening the Dynatrace apps behind each capability, as a share of the platform's active users. Reported beside coverage; it never feeds a score
+- **Persona PDF Reports** — Executive, Tactical and Technical, each in English, Portuguese and Spanish, plus a Custom builder (pick title, capabilities and sections). Reports embed the app's own charts
+- **Trace Proxy Mode** — Runs on tenants without the Traces-on-Grail entitlement by substituting validated metric/topology equivalents for span checks, and excluding the checks that have no honest proxy rather than faking them
+- **Economy Mode (DPS)** — Samples the checks where sampling provably cancels out and narrows the window where it does not, cutting a full run from ~370 GB to ~41 GB of Grail scan
+- **Preflight Validation** — Verifies all API scopes before running, and detects a missing span entitlement
 - **Dark/Light Theme** — Full support via Dynatrace Strato design tokens
 
 ## 9 Capabilities Assessed
@@ -36,7 +40,7 @@ Pulse Assessment is a native **Dynatrace App** that evaluates your environment's
 | Software Delivery | 10 | 3 / 4 / 3 | `#6366F1` |
 | **Total** | **111** | **30 / 46 / 40** | |
 
-## Maturity Scoring Model
+## Utilization Scoring Model
 
 ### Tier Weights (Progressive)
 
@@ -46,7 +50,7 @@ Pulse Assessment is a native **Dynatrace App** that evaluates your environment's
 | Best Practice | 25% | Only counts if Foundation ≥ 80% |
 | Excellence | 15% | Only counts if Best Practice ≥ 60% |
 
-### Maturity Levels
+### Utilization Levels
 
 | Level | Label | Condition |
 |---|---|---|
@@ -55,7 +59,7 @@ Pulse Assessment is a native **Dynatrace App** that evaluates your environment's
 | L2 | Operational | Foundation = 100% AND Best Practice ≥ 50% |
 | L3 | Optimized | Foundation = 100% AND Best Practice = 100% AND Excellence ≥ 50% |
 
-> **Why progressive?** Coverage shows *how much* you cover. Maturity shows *if you're covering in the right order*. A solid Foundation must come before chasing Excellence.
+> **Why progressive?** Coverage shows *how much* you cover. Utilization shows *if you're covering in the right order*. A solid Foundation must come before chasing Excellence.
 
 ## Prerequisites
 
@@ -187,27 +191,53 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed architecture, data
 
 > **Important:** Each assessment execution queries Grail tables (logs, spans, events, bizevents) which consume **DPS** based on GiB scanned.
 
-### Estimated cost per assessment (based on real BWM tenant data)
+### Measured cost per assessment
 
-| Source | GiB/query | Unique Queries | Total Scanned |
-|---|---|---|---|
-| Logs (2h window) | ~6 GiB | 24 | ~138 GiB |
-| Spans (2h window) | ~0.1 GiB | 23 | ~2.4 GiB |
-| Davis Problems (72h) | ~0.04 GiB | 7 | ~0.3 GiB |
-| Events (2h window) | ~0.05 GiB | 8 | ~0.4 GiB |
-| Bizevents (2h window) | ~0.1 GiB | 11 | ~1.1 GiB |
-| **Total** | | **73 unique** | **~142 GiB** |
+Numbers below were measured on a reference tenant over 30 days by reading the
+platform's own `dt.system.events` query log (which is itself free to query),
+not estimated.
 
-- Entity queries (`fetch dt.entity.*`) and `timeseries` queries have **zero or negligible** scan cost.
-- Actual cost depends on your tenant's data volume, Grail pricing tier, and contract.
-- Estimated cost: **~$0.92 – $1.42 per assessment** (at $0.0065–$0.01/GiB).
-- Running once per week: **~$4–$6/month**. Once per day: **~$28–$43/month**.
+| | Before Economy Mode | With Economy Mode |
+|---|---|---|
+| Scan per full run | 370 GB | **41 GB** |
+| Cost per run | ~$3.70 | **~$0.41** |
+| 16 runs / month | ~$59.83 | **~$6.60** |
 
-### Cost optimization applied (v2.3.51)
+Where the scan went before optimization: spans 81%, logs 18%, everything else
+under 1%. Entity (`fetch dt.entity.*`) and `timeseries` queries measured
+**literally zero** — 696 executions, 0 bytes.
 
-- AI Observability span queries reduced from 72h → 2h window (**90% cost reduction**).
-- Query deduplication: identical queries execute only once regardless of how many criteria share them.
-- All queries return only aggregated counts (`summarize count()`), minimizing data transfer.
+### How Economy Mode gets there
+
+Two levers, applied per criterion in `ui/app/scale-tier.ts`:
+
+- **Sampling** (`samplingRatio: 1000`) — only where it provably cancels out:
+  both sides of the ratio must be plain counts over the same table and window.
+  Measured on 2h of logs: scan fell from 4.99 GB to ~0.003 GB while the ratios
+  held (trace-correlated share 8.78% → 9.07%).
+- **Shorter window** — the honest lever for the rest, because `countDistinct`
+  collapses under sampling (distinct log sources 63 → 28; AI providers 4 → 1).
+  2h → 15m costs 0.61 GB instead of 3.87 GB and keeps 94% of distinct sources.
+
+Everything else is left alone, and a `scanLimitGBytes` ceiling caps every hot
+query so none can run away on a large tenant.
+
+Coverage values therefore become close estimates rather than exact counts —
+within ~1.5 percentage points on ratios and ~6% lower on distinct counts. The
+pass thresholds are wide bands (≥80 / ≥50 / ≥1), so pass/fail outcomes are
+effectively unchanged. The app discloses this on screen next to the scores.
+
+### Other cost controls
+
+- **24h query cache** — repeated runs in the same day are served from the
+  Document Store at zero Grail cost. Measured: 3,289 executions served from
+  119 distinct queries.
+- **Query deduplication** — identical query strings execute once regardless of
+  how many criteria share them.
+- **Aggregates only** — every query returns `summarize count()`-shaped output,
+  never raw records.
+- **Trace Proxy Mode** is cheaper still: its metric/topology replacements are
+  not Grail-scanning queries, so the 12 span checks leave the plan entirely.
 
 ## Scripts
 

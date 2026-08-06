@@ -17,9 +17,14 @@ npm run start   # Starts dev server with hot reload
 
 ### Local Development
 ```bash
-npm run start
+npx dt-app dev --environment-url https://YOUR_TENANT.apps.dynatrace.com
 ```
-Opens in browser connected to the tenant configured in `app.config.json`.
+`app.config.json` ships with a **dummy** `environmentUrl`
+(`https://abc12345.apps.dynatrace.com`) — real tenant URLs are not committed.
+It has to be a syntactically valid URL because `dt-app build` validates it and
+has no `--environment-url` flag; only `dev` and `deploy` accept one. So: pass
+the flag for dev/deploy, or set the URL locally and keep that edit out of your
+commits.
 
 ### Build
 ```bash
@@ -32,10 +37,12 @@ npm run deploy
 ```
 
 ### Switching Tenants
-Update `environmentUrl` in `app.config.json`:
+Pass `--environment-url` to `dt-app dev` / `dt-app deploy`, or update
+`environmentUrl` in `app.config.json` locally:
 ```json
 "environmentUrl": "https://YOUR_TENANT.apps.dynatrace.com"
 ```
+Never commit a real tenant URL, id or token.
 
 ## Code Structure
 
@@ -102,7 +109,13 @@ refactor: extract chart rendering to component
 
 ## Versioning
 
-Version is maintained in `app.config.json` under `"version"`. Bump on every release:
+Version lives in **two** files that must always agree: `app.config.json`
+(`"version"`, what the platform installs) and `ui/app/appVersion.ts`
+(`APP_VERSION`, what the footer shows). They drifted once and a release had to
+be superseded within minutes, because a published version cannot be re-uploaded
+with a different checksum — a mismatch costs you a version number.
+
+Bump on every release:
 - **Patch** (x.y.Z): Bug fixes, query adjustments
 - **Minor** (x.Y.0): New criteria, new features
 - **Major** (X.0.0): Breaking changes to scoring model or data format

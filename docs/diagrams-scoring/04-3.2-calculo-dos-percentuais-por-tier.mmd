@@ -1,0 +1,23 @@
+flowchart TD
+    A[Criterion results<br/>com tier + points] --> B[Particiona por tier]
+
+    B --> F1[Foundation criteria]
+    B --> P1[Best Practice criteria]
+    B --> E1[Excellence criteria]
+
+    F1 --> F2[fTotal = count<br/>fPassed = passed count]
+    P1 --> P2[pTotal = count<br/>pPassed = passed count]
+    E1 --> E2[eTotal = count<br/>ePassed = passed count]
+
+    F2 --> F3[fPct = fPassed / fTotal<br/>0.0 to 1.0]
+    P2 --> P3[bPct = pPassed / pTotal<br/>0.0 to 1.0]
+    E2 --> E3[ePct = ePassed / eTotal<br/>0.0 to 1.0]
+
+    F3 --> G[Apply progressive gates]
+    P3 --> G
+    E3 --> G
+
+    style F1 fill:#3B82F6,color:#fff
+    style P1 fill:#F59E0B,color:#fff
+    style E1 fill:#EC4899,color:#fff
+    style G fill:#10B981,color:#fff

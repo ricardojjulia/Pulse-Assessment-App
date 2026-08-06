@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useCallback } from "react";
 import type { CapabilityResult } from "../hooks/useCoverageData";
-import { maturity } from "./TechRadar";
+import { utilization } from "./TechRadar";
 
 const R_RATIO = 0.34;
 
@@ -38,7 +38,7 @@ export const ConnectorLines: React.FC<Props> = React.memo(({ capabilities, anim,
       const blipR = hubR + (cap.score * anim / 100) * (R - hubR);
       const startR = blipR + blipDotSize + 4;
       const alpha = dim ? 0.2 : act ? 0.95 : 0.6;
-      const ml = maturity(cap.score);
+      const ml = utilization(cap.score);
       const isR = cos > 0.15, isL = cos < -0.15;
 
       // Label center position (matches ChartLabels labelR)

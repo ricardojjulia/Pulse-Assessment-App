@@ -1,0 +1,15 @@
+flowchart TD
+    A[Distribuicao do<br/>cliente] --> B{Padrao?}
+
+    B -->|Foundation forte<br/>Excellence ignorado| C["Coverage MEDIO<br/>Maturity ALTO<br/><br/>Mensagem: <br/>basico solido, falta avancar"]
+
+    B -->|Excellence alto<br/>Foundation fraco| D["Coverage MEDIO<br/>Maturity BAIXO<br/><br/>Mensagem:<br/>tem coisas avancadas<br/>mas o basico nao esta solido"]
+
+    B -->|Tudo proporcional| E["Coverage = Maturity<br/><br/>Mensagem:<br/>adocao uniforme"]
+
+    B -->|Tudo 100%| F["Coverage 100<br/>Maturity 100<br/><br/>Mensagem:<br/>L3 Optimized"]
+
+    style C fill:#5EB1A9,color:#fff
+    style D fill:#EF4444,color:#fff
+    style E fill:#EEA746,color:#fff
+    style F fill:#36B37E,color:#fff

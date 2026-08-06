@@ -24,6 +24,17 @@ export interface Criterion {
   queryB?: string;
   /** Optional query that determines whether the criterion applies to the tenant. */
   applicabilityQuery?: string;
+  /** Hard-coded denominator when the expected value is a known constant
+   *  (e.g., "5 expected log levels"). Use this INSTEAD of queryB whenever
+   *  the denominator would be a query that just discards its result and
+   *  returns a literal — those queries waste ~15 GB of Grail scan each
+   *  (confirmed in the v2.5.0 perf report) for zero information gain.
+   *  Mutually exclusive with queryB; useCoverageData honors queryB first. */
+  denominatorConstant?: number;
+  /** Set by applyTraceProxyMode (../trace-proxy.ts) when this criterion's
+   *  span query was replaced with a metric/topology proxy. Surfaces as the
+   *  "≈ proxy" chip on criteria rows and in the perf/PDF disclosures. */
+  proxied?: boolean;
   thresholds: Threshold[];
 }
 
@@ -291,7 +302,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         thresholds: [{ min: 80 }, { min: 50 }, { min: 1 }],
       },
       {
-        id: "a12", label: "Service tagging maturity (%)",
+        id: "a12", label: "Service tagging utilization (%)",
         description: "Percentage of services with at least one tag assigned — tags enable release tracking, ownership, and filtering.",
         query: "fetch dt.entity.service | fieldsAdd t = tags | expand t | summarize count = countDistinct(id)",
         queryB: "fetch dt.entity.service | summarize count()",
@@ -532,7 +543,10 @@ export const CAPABILITIES: CapabilityDef[] = [
         id: "l9", label: "Log severity diversity (%)",
         description: "Percentage of severity levels being ingested (out of 5: ERROR, WARN, INFO, DEBUG, TRACE).",
         query: "fetch logs | filter timestamp > now() - 2h | summarize countDistinct(loglevel)",
-        queryB: "fetch logs | filter timestamp > now() - 2h | summarize count = count() | fields always5 = 5",
+        // denominator was previously a query that scanned ~15 GB of logs just
+        // to discard the count and return the literal 5. See Task #51 / v2.5.1
+        // perf-waste audit. Now expressed as a code constant.
+        denominatorConstant: 5,
         thresholds: [{ min: 60 }, { min: 40 }],
       },
       {
@@ -546,7 +560,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         id: "l11", label: "Dedicated buckets usage",
         description: "Number of distinct Grail buckets used for log storage (expected >= 2 for proper segregation).",
         query: "fetch logs, scanLimitGBytes:-1 | filter timestamp > now() - 2h | summarize countDistinct(dt.system.bucket)",
-        queryB: "fetch logs | filter timestamp > now() - 2h | summarize count = count() | fields always2 = 2",
+        denominatorConstant: 2,
         thresholds: [{ min: 100 }, { min: 50 }],
       },
       {
@@ -572,9 +586,9 @@ export const CAPABILITIES: CapabilityDef[] = [
       },
       {
         id: "l15", label: "Log-based events",
-        description: "Presence of events generated from log data — indicates mature log-based alerting.",
+        description: "Presence of events generated from log data — indicates established log-based alerting.",
         query: 'fetch events | filter timestamp > now() - 24h | filter event.kind == "LOG" | summarize count()',
-        queryB: "fetch logs | filter timestamp > now() - 2h | summarize count = count() | fields always1 = 1",
+        denominatorConstant: 1,
         thresholds: [{ min: 100 }, { min: 50 }],
       },
       {
@@ -600,10 +614,10 @@ export const CAPABILITIES: CapabilityDef[] = [
         thresholds: [{ min: 30 }, { min: 10 }, { min: 1 }],
       },
       {
-        id: "s2", label: "Security event type activity (30d, %)",
-        description: "Recent breadth of security event types detected over the last 30 days vs a 5-category baseline.",
-        query: 'fetch events, from:now()-30d | filter event.kind == "SECURITY_EVENT" | summarize countDistinct(event.type)',
-        queryB: 'fetch events, from:now()-30d | filter event.kind == "SECURITY_EVENT" | summarize count = countDistinct(event.type) | fields expected = 5',
+        id: "s2", label: "Security event type coverage (%)",
+        description: "Percentage of security event types detected vs expected categories.",
+        query: 'fetch events | filter event.kind == "SECURITY_EVENT" | filter timestamp > now() - 24h | summarize countDistinct(event.type)',
+        denominatorConstant: 5,
         thresholds: [{ min: 60 }, { min: 20 }],
       },
       {
@@ -638,7 +652,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         id: "s7", label: "Event kind diversity (%)",
         description: "Percentage of event kinds monitored vs expected (out of 5).",
         query: "fetch events | filter timestamp > now() - 2h | summarize countDistinct(event.kind)",
-        queryB: "fetch events | filter timestamp > now() - 2h | summarize count = countDistinct(event.kind) | fields expected = 5",
+        denominatorConstant: 5,
         thresholds: [{ min: 60 }, { min: 40 }],
       },
       {
@@ -695,7 +709,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         id: "t3", label: "Problem category coverage (%)",
         description: "Percentage of problem categories detected (out of 4: AVAILABILITY, ERROR, SLOWDOWN, RESOURCE).",
         query: "fetch dt.davis.problems, from:now()-72h | filter not(dt.davis.is_duplicate) | summarize countDistinct(event.category)",
-        queryB: "fetch dt.davis.problems, from:now()-72h | filter not(dt.davis.is_duplicate) | summarize count = countDistinct(event.category) | fields expected = 4",
+        denominatorConstant: 4,
         thresholds: [{ min: 75 }, { min: 50 }, { min: 25 }],
       },
       {
@@ -765,7 +779,7 @@ export const CAPABILITIES: CapabilityDef[] = [
       {
         id: "ai1", label: "AI span service coverage (%)",
         description: "Percentage of services with AI/LLM spans.",
-        query: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count = countDistinct(coalesce(dt.entity.service, service.name)) | fields count",
+        query: "fetch spans, from:now()-72h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count = countDistinct(coalesce(dt.entity.service, service.name)) | fields count",
         queryB: "fetch dt.entity.service | summarize count()",
         applicabilityQuery: AI_SPANS_QUERY,
         thresholds: [{ min: 10 }, { min: 5 }, { min: 1 }],
@@ -773,64 +787,64 @@ export const CAPABILITIES: CapabilityDef[] = [
       {
         id: "ai2", label: "Token tracking coverage (%)",
         description: "Percentage of AI spans with token usage tracking.",
-        query: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | filter isNotNull(gen_ai.usage.input_tokens) or isNotNull(gen_ai.usage.output_tokens) | summarize count()",
-        queryB: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count()",
+        query: "fetch spans, from:now()-72h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | filter isNotNull(gen_ai.usage.input_tokens) or isNotNull(gen_ai.usage.output_tokens) | summarize count()",
+        queryB: "fetch spans, from:now()-72h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count()",
         applicabilityQuery: AI_SPANS_QUERY,
         thresholds: [{ min: 80 }, { min: 50 }, { min: 1 }],
       },
       {
         id: "ai3", label: "AI provider diversity (%)",
         description: "Percentage of known AI providers detected vs expected (out of 5).",
-        query: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | fieldsAdd provider = coalesce(gen_ai.system, gen_ai.provider.name) | summarize countDistinct(provider)",
-        queryB: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | fieldsAdd provider = coalesce(gen_ai.system, gen_ai.provider.name) | summarize count = countDistinct(provider) | fields expected = 5",
+        query: "fetch spans, from:now()-72h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | fieldsAdd provider = coalesce(gen_ai.system, gen_ai.provider.name) | summarize countDistinct(provider)",
+        denominatorConstant: 5,
         applicabilityQuery: AI_SPANS_QUERY,
         thresholds: [{ min: 40 }, { min: 20 }],
       },
       {
         id: "ai4", label: "Agent invocation coverage (%)",
         description: "Percentage of AI spans with agent invocation tracing.",
-        query: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | filter isNotNull(gen_ai.agent.name) | summarize count()",
-        queryB: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count()",
+        query: "fetch spans, from:now()-72h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | filter isNotNull(gen_ai.agent.name) | summarize count()",
+        queryB: "fetch spans, from:now()-72h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count()",
         applicabilityQuery: AI_SPANS_QUERY,
         thresholds: [{ min: 30 }, { min: 10 }, { min: 1 }],
       },
       {
         id: "ai5", label: "Prompt/response tracing coverage (%)",
         description: "Percentage of AI spans with prompt or response tracing.",
-        query: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | filter isNotNull(gen_ai.prompt) or isNotNull(gen_ai.completion) or isNotNull(gen_ai.input.messages) or isNotNull(gen_ai.output.messages) | summarize count()",
-        queryB: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count()",
+        query: "fetch spans, from:now()-72h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | filter isNotNull(gen_ai.prompt) or isNotNull(gen_ai.completion) or isNotNull(gen_ai.input.messages) or isNotNull(gen_ai.output.messages) | summarize count()",
+        queryB: "fetch spans, from:now()-72h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count()",
         applicabilityQuery: AI_SPANS_QUERY,
         thresholds: [{ min: 80 }, { min: 50 }, { min: 1 }],
       },
       {
-        id: "ai6", label: "AI status tracking coverage (%)",
-        description: "Percentage of AI spans with request status captured for error analysis.",
-        query: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | filter isNotNull(status_code) | summarize count()",
-        queryB: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count()",
+        id: "ai6", label: "AI error tracking coverage (%)",
+        description: "Percentage of AI spans with error status tracking.",
+        query: 'fetch spans, from:now()-72h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | filter status_code == "ERROR" | summarize count()',
+        queryB: "fetch spans, from:now()-72h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count()",
         applicabilityQuery: AI_SPANS_QUERY,
-        thresholds: [{ min: 80 }, { min: 50 }, { min: 1 }],
+        thresholds: [{ min: 1 }],
       },
       {
         id: "ai7", label: "Guardrail coverage (%)",
         description: "Percentage of AI spans with guardrail monitoring.",
-        query: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | filter isNotNull(gen_ai.guardrail) | summarize count()",
-        queryB: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count()",
+        query: "fetch spans, from:now()-72h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | filter isNotNull(gen_ai.guardrail) | summarize count()",
+        queryB: "fetch spans, from:now()-72h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count()",
         applicabilityQuery: AI_SPANS_QUERY,
         thresholds: [{ min: 50 }, { min: 20 }, { min: 1 }],
       },
       {
         id: "ai8", label: "Cost tracking coverage (%)",
         description: "Percentage of AI spans with cost tracking.",
-        query: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | filter isNotNull(gen_ai.usage.cost) | summarize count()",
-        queryB: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count()",
+        query: "fetch spans, from:now()-72h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | filter isNotNull(gen_ai.usage.cost) | summarize count()",
+        queryB: "fetch spans, from:now()-72h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count()",
         applicabilityQuery: AI_SPANS_QUERY,
         thresholds: [{ min: 50 }, { min: 20 }, { min: 1 }],
       },
       {
         id: "ai9", label: "AI tracing service breadth (%)",
         description: "Percentage of total spans that are AI-related.",
-        query: "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count()",
-        queryB: "fetch spans, from:now()-2h | summarize count()",
+        query: "fetch spans, from:now()-72h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count()",
+        queryB: "fetch spans, from:now()-72h | summarize count()",
         applicabilityQuery: AI_SPANS_QUERY,
         thresholds: [{ min: 5 }, { min: 1 }],
       },
@@ -854,7 +868,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         id: "b2", label: "Bizevent type diversity (%)",
         description: "Percentage of expected business event types detected (out of 10 baseline types).",
         query: "fetch bizevents | filter timestamp > now() - 2h | summarize countDistinct(event.type)",
-        queryB: "fetch bizevents | filter timestamp > now() - 2h | summarize count = countDistinct(event.type) | fields expected = 10",
+        denominatorConstant: 10,
         applicabilityQuery: BIZEVENTS_QUERY,
         thresholds: [{ min: 60 }, { min: 30 }],
       },
@@ -870,7 +884,7 @@ export const CAPABILITIES: CapabilityDef[] = [
         id: "b4", label: "Bizevent provider diversity (%)",
         description: "Percentage of expected business event providers detected (out of 5 baseline providers).",
         query: "fetch bizevents | filter timestamp > now() - 2h | summarize countDistinct(event.provider)",
-        queryB: "fetch bizevents | filter timestamp > now() - 2h | summarize count = countDistinct(event.provider) | fields expected = 5",
+        denominatorConstant: 5,
         applicabilityQuery: BIZEVENTS_QUERY,
         thresholds: [{ min: 60 }, { min: 20 }],
       },
@@ -932,14 +946,14 @@ export const CAPABILITIES: CapabilityDef[] = [
         id: "sd3", label: "Event kind diversity (%)",
         description: "Percentage of event kinds present (out of 5 main kinds).",
         query: "fetch events | filter timestamp > now() - 2h | summarize countDistinct(event.kind)",
-        queryB: "fetch events | filter timestamp > now() - 2h | summarize count = countDistinct(event.kind) | fields expected = 5",
+        denominatorConstant: 5,
         thresholds: [{ min: 60 }, { min: 40 }],
       },
       {
         id: "sd4", label: "Event type diversity (%)",
         description: "Percentage of expected delivery event types detected (out of 10 baseline types).",
         query: "fetch events | filter timestamp > now() - 2h | summarize countDistinct(event.type)",
-        queryB: "fetch events | filter timestamp > now() - 2h | summarize count = countDistinct(event.type) | fields expected = 10",
+        denominatorConstant: 10,
         thresholds: [{ min: 60 }, { min: 30 }],
       },
       {

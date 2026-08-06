@@ -1,0 +1,16 @@
+flowchart TD
+    A[fPct, bPct, ePct] --> B{fPct >= 0.5?}
+
+    B -->|No| L0[L0 - Not Adopted<br/>Foundation &lt; 50%]
+    B -->|Yes| C{fPct >= 1.0<br/>AND<br/>bPct >= 0.5?}
+
+    C -->|No| L1[L1 - Foundation<br/>tem o basico mas falta profundidade]
+    C -->|Yes| D{fPct == 1.0<br/>AND bPct == 1.0<br/>AND ePct >= 0.5?}
+
+    D -->|No| L2[L2 - Operational<br/>base + parte do BP]
+    D -->|Yes| L3[L3 - Optimized<br/>tudo + parte do Excellence]
+
+    style L0 fill:#CD3C44,color:#fff
+    style L1 fill:#DC671E,color:#fff
+    style L2 fill:#EEA746,color:#fff
+    style L3 fill:#36B37E,color:#fff

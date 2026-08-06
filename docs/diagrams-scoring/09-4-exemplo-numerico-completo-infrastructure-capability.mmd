@@ -1,0 +1,8 @@
+flowchart LR
+    A[fPct = 1.00<br/>bPct = 0.55<br/>ePct = 0.38] --> B{fPct >= 0.5?<br/>SIM}
+    B --> C{fPct == 1.0<br/>AND bPct >= 0.5?<br/>1.00 == 1.0 e 0.55 >= 0.5 SIM}
+    C --> D{fPct == 1.0<br/>AND bPct == 1.0<br/>AND ePct >= 0.5?<br/>bPct == 1.0 FALSE}
+    D --> L2[L2 - Operational]
+
+    style A fill:#3B82F6,color:#fff
+    style L2 fill:#EEA746,color:#fff

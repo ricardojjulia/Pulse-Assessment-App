@@ -1,0 +1,14 @@
+flowchart LR
+    A[~94 criteria] --> B[CRITERION_TIERS map<br/>id -> tier]
+
+    B --> F[Foundation<br/>~30% dos criteria<br/>essencial]
+    B --> P[Best Practice<br/>~45% dos criteria<br/>adocao mais profunda]
+    B --> E[Excellence<br/>~25% dos criteria<br/>uso avancado]
+
+    F --> Fex["i1 Host CPU<br/>i2 Host memory<br/>a1 Service tracing<br/>d1 RUM action<br/>l1 Host logs"]
+    P --> Pex["i3 Host disk<br/>a2 Service method<br/>d7 Synthetic HTTP<br/>l7 Error logs"]
+    E --> Eex["i7 K8s cluster<br/>a4 OTel<br/>d11 Synthetic avail<br/>s5 OWASP"]
+
+    style F fill:#3B82F6,color:#fff
+    style P fill:#F59E0B,color:#fff
+    style E fill:#EC4899,color:#fff

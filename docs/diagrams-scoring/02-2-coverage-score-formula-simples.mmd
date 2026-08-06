@@ -1,0 +1,14 @@
+flowchart TD
+    A[Capability com N criterios<br/>cada um com points 0 ou 1] --> B[passed = sum points<br/>quantos passaram]
+
+    B --> C[coverage =<br/>passed / N x 100]
+
+    C --> D[Round para inteiro]
+    D --> E[Capability.score 0-100]
+
+    E --> F[Renderiza no RADAR<br/>com cor da banda<br/>N/A Low Moderate Good Excellent]
+
+    style A fill:#3B82F6,color:#fff
+    style C fill:#8B5CF6,color:#fff
+    style E fill:#10B981,color:#fff
+    style F fill:#F59E0B,color:#fff
