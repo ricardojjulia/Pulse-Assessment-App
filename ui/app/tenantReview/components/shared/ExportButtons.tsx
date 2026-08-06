@@ -20,6 +20,8 @@ interface ExportButtonsProps {
   sections?: ExportSection[];
   /** Optional summary lines added below the title */
   summary?: string[];
+  /** Optional comprehensive Markdown export supplied by an aggregate report page */
+  completeMarkdown?: { onExport: () => void; disabled?: boolean };
 }
 
 function downloadFile(content: string, filename: string, mimeType: string): void {
@@ -49,7 +51,7 @@ function getTenantId(): string {
   }
 }
 
-export const ExportButtons: React.FC<ExportButtonsProps> = ({ title, findings, sections, summary }) => {
+export const ExportButtons: React.FC<ExportButtonsProps> = ({ title, findings, sections, summary, completeMarkdown }) => {
   const dateStr = new Date().toISOString().slice(0, 10);
   const tenantId = useMemo(() => getTenantId(), []);
   const slug = slugify(title);
@@ -110,6 +112,11 @@ export const ExportButtons: React.FC<ExportButtonsProps> = ({ title, findings, s
 
   return (
     <Flex gap={8}>
+      {completeMarkdown && (
+        <Button onClick={completeMarkdown.onExport} disabled={completeMarkdown.disabled} variant="emphasized" color="primary">
+          Export All Markdown
+        </Button>
+      )}
       <Button onClick={exportJson} variant="default" color="neutral">
         Export JSON
       </Button>

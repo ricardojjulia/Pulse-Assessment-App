@@ -22,6 +22,8 @@ import { TenantInventory } from "./pages/TenantInventory";
 import { Utilization } from "./pages/Utilization";
 import { BestPractices } from "./pages/BestPractices";
 import { ReviewConfigProvider, useReviewConfig } from "./hooks/useReviewConfig";
+import type { AssessmentSnapshot } from "../hooks/useAssessmentHistory";
+import type { CoverageData } from "../hooks/useCoverageData";
 
 const BestPracticesGuard: React.FC = () => {
   const { config } = useReviewConfig();
@@ -31,14 +33,19 @@ const BestPracticesGuard: React.FC = () => {
   return <BestPractices />;
 };
 
-export const TenantReviewApp: React.FC = () => {
+interface TenantReviewAppProps {
+  coverageData: CoverageData;
+  snapshots: AssessmentSnapshot[];
+}
+
+export const TenantReviewApp: React.FC<TenantReviewAppProps> = ({ coverageData, snapshots }) => {
   return (
     <ReviewConfigProvider>
       <AppShell>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/inventory" element={<TenantInventory />} />
-          <Route path="/adoption" element={<Overview />} />
+          <Route path="/adoption" element={<Overview coverageData={coverageData} snapshots={snapshots} />} />
           <Route path="/monitoring" element={<MonitoringConfig />} />
           <Route path="/settings" element={<SettingsFramework />} />
           <Route path="/storage" element={<DataStorage />} />

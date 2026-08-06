@@ -11,11 +11,22 @@ import { FindingsTable } from "../components/shared/FindingsTable";
 import { ExportButtons } from "../components/shared/ExportButtons";
 import type { ExportSection } from "../components/shared/ExportButtons";
 import { classifyMigration } from "../constants/thresholds";
+import type { AssessmentSnapshot } from "../../hooks/useAssessmentHistory";
+import type { CoverageData } from "../../hooks/useCoverageData";
+import { downloadCompleteMarkdownReport } from "../../reports/generateCompleteMarkdownReport";
+import { useBestPracticesReview } from "../areas/bestPractices.data";
 
-export const Overview: React.FC = () => {
+interface OverviewProps {
+  coverageData: CoverageData;
+  snapshots: AssessmentSnapshot[];
+}
+
+export const Overview: React.FC<OverviewProps> = ({ coverageData, snapshots }) => {
   const overview = useTenantOverview();
+  const bestPractices = useBestPracticesReview();
 
   const isAnyLoading = overview.areaResults.some((r) => r.isLoading);
+  const isCompleteExportLoading = isAnyLoading || bestPractices.isLoading;
 
   const exportSections: ExportSection[] = overview.areaResults
     .filter((r) => r.status !== "unknown")
@@ -42,6 +53,31 @@ export const Overview: React.FC = () => {
           title="Tenant Review Overview"
           sections={exportSections}
           summary={[`Overall Score: ${overview.overallScore}/100`, `Gen3 Migration: ${overview.overallMigrationPercentage}%`, `Total Findings: ${overview.totalFindings} (${overview.criticalFindings.length} critical)`, `Areas Needing Attention: ${overview.areasNeedingAttention.join(", ") || "None"}`]}
+          completeMarkdown={{
+            disabled: isCompleteExportLoading,
+            onExport: () => {
+              if (coverageData.capabilities.length === 0) {
+                alert("No assessment has been run yet. Go to the Coverage Assessment page and run an assessment before exporting.");
+                return;
+              }
+              try {
+                downloadCompleteMarkdownReport({
+                  capabilities: coverageData.capabilities,
+                  totalScore: coverageData.totalScore,
+                  overallMaturityLevel: coverageData.overallMaturityLevel,
+                  tenant: coverageData.tenant,
+                  date: coverageData.date,
+                  stats: coverageData.stats,
+                  entityCounts: coverageData.entityCounts,
+                  snapshots,
+                  tenantReview: overview,
+                  bestPractices,
+                });
+              } catch (e) {
+                alert(`Export failed: ${e instanceof Error ? e.message : String(e)}`);
+              }
+            },
+          }}
         />
       </Flex>
 

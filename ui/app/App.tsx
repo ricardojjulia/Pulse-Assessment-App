@@ -40,7 +40,7 @@ export const App = () => {
             <Routes>
               <Route path="/" element={<CoverageAssessment history={history} coverageData={coverageData} />} />
               <Route path="/compare" element={<ComparisonPage snapshots={history.snapshots} coverageData={coverageData} saveSnapshot={history.saveSnapshot} />} />
-              <Route path="/tenant-review/*" element={<TenantReviewApp />} />
+              <Route path="/tenant-review/*" element={<TenantReviewApp coverageData={coverageData} snapshots={history.snapshots} />} />
             </Routes>
           </Suspense>
         </Page.Main>
