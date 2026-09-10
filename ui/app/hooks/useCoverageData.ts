@@ -97,7 +97,7 @@ export interface CoverageData {
   liveScannedRecords: number;
   consolidation: Record<string, number>;
   setConsolidation: (factors: Record<string, number>) => void;
-  start: (caps?: CapabilityDef[]) => void;
+  start: (caps?: CapabilityDef[], segmentId?: string) => void;
   refresh: () => void;
   reset: () => void;
   goHome: () => void;
@@ -228,7 +228,7 @@ const POLL_INTERVAL_MS = 3000;
 const QUERY_TIMEOUT_MS = 30000;
 const DEFAULT_TIMEFRAME_HOURS = 2;
 
-async function executeDql(query: string): Promise<DqlResult> {
+async function executeDql(query: string, segmentId?: string): Promise<DqlResult> {
   try {
     const response = await queryExecutionClient.queryExecute({
       body: {
@@ -237,6 +237,7 @@ async function executeDql(query: string): Promise<DqlResult> {
         maxResultRecords: 1000,
         defaultTimeframeStart: new Date(Date.now() - DEFAULT_TIMEFRAME_HOURS * 60 * 60 * 1000).toISOString(),
         defaultTimeframeEnd: new Date().toISOString(),
+        ...(segmentId ? { filterSegments: [{ id: segmentId }] } : {}),
       },
     });
 
@@ -412,6 +413,7 @@ async function executeAllUnique(
   queryConsumers: Map<string, string[]>,
   persistentCache: QueryCache | null,
   onProgress: (scannedBytes: number, scannedRecords: number) => void,
+  segmentId?: string,
 ): Promise<ExecutionResult> {
   // The cache is keyed by the ORIGINAL query string — the same string that
   // each criterion's `query`/`queryB` field holds. This is intentional: every
@@ -476,7 +478,7 @@ async function executeAllUnique(
       let ok = true;
       let errorMessage: string | null = null;
       try {
-        result = await executeDql(executedQ);
+        result = await executeDql(executedQ, segmentId);
       } catch (err) {
         ok = false;
         errorMessage = err instanceof Error ? err.message : String(err);
@@ -579,6 +581,7 @@ export function useCoverageData(
   const capsCacheRef = useRef<CapabilityResult[]>([]);
   const cancelRef = useRef(0);
   const capsRef = useRef<CapabilityDef[]>(CAPABILITIES);
+  const segmentIdRef = useRef<string | undefined>(undefined);
 
   const runAssessment = useCallback(async () => {
     const runToken = ++cancelRef.current;
@@ -632,8 +635,12 @@ export function useCoverageData(
         } catch { /* ignore */ }
         return 'unknown-tenant';
       })();
-      const persistentCache = new QueryCache(tenantId);
-      await persistentCache.load();
+      // Segment-scoped runs must never read from or write to the all-tenant
+      // persistent cache — the cached values would be unfiltered. We simply
+      // pass null here; executeAllUnique treats null as "no cache".
+      const segmentId = segmentIdRef.current;
+      const persistentCache = segmentId ? null : new QueryCache(tenantId);
+      if (persistentCache) await persistentCache.load();
 
       // ── C3: smart-skip preflight ─────────────────────────────────────────
       // Some criteria depend on entity classes that may not exist in this
@@ -664,7 +671,7 @@ export function useCoverageData(
             // fraction of a second, well before any meaningful UI feedback
             // would matter. Suppressing the callback here keeps the live
             // scan counter monotonically aligned with Grail data scans.
-          })
+          }, segmentId)
         : null;
       if (cancelRef.current !== runToken) return; // cancelled
 
@@ -727,6 +734,7 @@ export function useCoverageData(
             setLiveScannedRecords(recordsSoFar);
           }
         },
+        segmentId,
       );
 
       if (cancelRef.current !== runToken) return; // cancelled
@@ -878,7 +886,7 @@ export function useCoverageData(
       // forget: the run is already done, the user sees results, and we
       // don't want to delay the UI on a Doc Store write. Errors are logged
       // inside flush() and don't surface to the user.
-      void persistentCache.flush();
+      if (persistentCache) void persistentCache.flush();
 
       // Stash perf entries + run metadata for the downloader.
       setPerfEntries(livePerfEntries);
@@ -984,7 +992,11 @@ export function useCoverageData(
     return h === "localhost" ? "localhost (dev)" : h.split(".")[0];
   })();
 
-  const startFn = useCallback((caps?: CapabilityDef[]) => { capsRef.current = caps && caps.length > 0 ? caps : CAPABILITIES; setRunId((n) => n + 1); }, []);
+  const startFn = useCallback((caps?: CapabilityDef[], segmentId?: string) => {
+    capsRef.current = caps && caps.length > 0 ? caps : CAPABILITIES;
+    segmentIdRef.current = segmentId;
+    setRunId((n) => n + 1);
+  }, []);
   const refreshFn = useCallback(() => setRunId((n) => n + 1), []);
   const resetFn = useCallback(() => { setIdle(true); setCapabilities([]); setStats(null); setEntityCounts(null); setError(null); setConsolidation({}); setPerfEntries(null); setLastRunMeta(null); }, []);
   const goHomeFn = useCallback(() => { setIdle(true); }, []);
