@@ -108,6 +108,9 @@ export const CRITERION_REMEDIATION: Record<string, { action: string; docLink?: s
   ai7: { action: "Implement guardrail checks as separate spans. Track guardrail.triggered and guardrail.action attributes.", docLink: "https://docs.dynatrace.com/docs/observe/dynatrace-for-ai-observability" },
   ai8: { action: "Calculate cost per request using token counts × provider pricing. Add gen_ai.usage.cost attribute to spans.", docLink: "https://docs.dynatrace.com/docs/observe/dynatrace-for-ai-observability" },
   ai9: { action: "Ensure AI services are instrumented with OTel and exporting spans to Dynatrace for breadth measurement.", docLink: "https://docs.dynatrace.com/docs/observe/dynatrace-for-ai-observability" },
+  ai10: { action: "Instrument AI spans with gen_ai.server.time_to_first_token or gen_ai.server.ttft attributes. Ensure duration is always set so latency SLOs can be computed.", docLink: "https://docs.dynatrace.com/docs/observe/dynatrace-for-ai-observability" },
+  ai11: { action: "Track gen_ai.request.model across all LLM calls to measure model diversity. Compare model performance and cost across providers.", docLink: "https://docs.dynatrace.com/docs/observe/dynatrace-for-ai-observability" },
+  ai12: { action: "Capture gen_ai.operation.name on all AI spans (e.g., chat, embeddings, completion, rerank). Ensure each operation type is traced as a distinct span.", docLink: "https://docs.dynatrace.com/docs/observe/dynatrace-for-ai-observability" },
   // Business Observability
   b1: { action: "Send business events via Bizevent Ingest API or OneAgent auto-capture. Define event types per business process.", docLink: "https://docs.dynatrace.com/docs/platform-modules/business-analytics" },
   b2: { action: "Instrument multiple business flows (purchases, signups, searches) as distinct event types.", docLink: "https://docs.dynatrace.com/docs/platform-modules/business-analytics" },
@@ -128,4 +131,10 @@ export const CRITERION_REMEDIATION: Record<string, { action: string; docLink?: s
   sd8: { action: "Davis detects service problems automatically. Ensure broad service monitoring so affected_entity_ids cover all services.", docLink: "https://docs.dynatrace.com/docs/deliver/release-monitoring" },
   sd9: { action: "Apply tags to process groups using auto-tagging rules for consistent deployment tracking and version management.", docLink: "https://docs.dynatrace.com/docs/manage/tags-and-metadata" },
   sd10: { action: "Define ownership tags (owner, team, cost-center) on services and process groups for incident routing and accountability.", docLink: "https://docs.dynatrace.com/docs/manage/tags-and-metadata" },
+  sd11: { action: "Create SLOs in Dynatrace via Settings → Service Level Objectives. Start by defining availability and latency SLOs for your most critical services.", docLink: "https://docs.dynatrace.com/docs/deliver/service-level-objectives" },
+  sd12: { action: "Enable all defined SLOs and configure burn rate alerting. Review disabled SLOs in Settings → Service Level Objectives and activate them.", docLink: "https://docs.dynatrace.com/docs/deliver/service-level-objectives" },
+  sd13: { action: "Create Dynatrace Workflows in the Automations app to automate remediation steps. Start with problem-triggered workflows for top failure scenarios.", docLink: "https://docs.dynatrace.com/docs/analyze-explore-automate/automations" },
+  // Log Analytics (additional)
+  l17: { action: "Create dedicated Grail log buckets (e.g., security, application, infrastructure) in Settings → Grail → Buckets. Configure OpenPipeline routing rules to direct log streams to the appropriate buckets.", docLink: "https://docs.dynatrace.com/docs/platform/grail/organize-data" },
+  l18: { action: "Ensure applications emit logs at multiple severity levels (DEBUG, INFO, WARN, ERROR, CRITICAL). Use OpenPipeline processing rules to normalize severity fields from different log sources.", docLink: "https://docs.dynatrace.com/docs/platform/openpipeline" },
 };

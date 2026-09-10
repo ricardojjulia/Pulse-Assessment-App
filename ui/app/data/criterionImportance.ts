@@ -108,6 +108,9 @@ export const CRITERION_IMPORTANCE: Record<string, string> = {
   ai7: "Guardrail monitoring ensures AI outputs meet safety, quality, and compliance requirements for responsible AI deployment.",
   ai8: "AI cost tracking per request enables FinOps for AI workloads — without it, cost optimization and budget planning are impossible.",
   ai9: "AI tracing breadth shows how prominent AI workloads are in your service landscape — important for capacity planning.",
+  ai10: "AI latency tracking enables performance SLOs for AI workloads and identifies slow models or overloaded endpoints.",
+  ai11: "Model diversity indicates a mature AI observability strategy covering multiple providers and use cases.",
+  ai12: "Operation type diversity (chat, embeddings, completions) reveals the breadth of AI capabilities being monitored.",
   // Business Observability
   b1: "Business events connect technical metrics to business outcomes. Without them, IT operates in isolation from business impact.",
   b2: "Event type diversity indicates mature business event instrumentation — multiple types mean multiple processes are tracked.",
@@ -128,4 +131,10 @@ export const CRITERION_IMPORTANCE: Record<string, string> = {
   sd8: "Davis problem detection across services validates automated quality feedback — measuring how many services have AI-detected issues.",
   sd9: "Process group tagging enables release tracking, version management, and ownership mapping — essential for deployment governance.",
   sd10: "Ownership tags connect services to responsible teams — critical for incident routing, SLA management, and accountability.",
+  sd11: "SLO adoption is the single strongest indicator of reliability engineering maturity — without SLOs there are no error budgets.",
+  sd12: "Active SLOs directly enforce reliability targets and are required for automated error budget alerting.",
+  sd13: "Workflow adoption indicates the team has moved from passive monitoring to active automated remediation.",
+  // Log Analytics (additional)
+  l17: "Dedicated log buckets enable cost-effective retention, tiered storage, and compliance-driven log separation.",
+  l18: "Severity diversity confirms that log instrumentation captures the full spectrum from DEBUG to CRITICAL.",
 };

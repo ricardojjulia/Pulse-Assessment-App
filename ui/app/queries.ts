@@ -44,7 +44,7 @@ export interface CapabilityDef {
   criteria: Criterion[];
 }
 
-const AI_SPANS_QUERY = "fetch spans, from:now()-2h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count()";
+const AI_SPANS_QUERY = "fetch spans, from:now()-72h | filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name) or isNotNull(gen_ai.request.model) or isNotNull(gen_ai.operation.name) | summarize count()";
 const BIZEVENTS_QUERY = "fetch bizevents | filter timestamp > now() - 2h | summarize count()";
 
 export const CAPABILITIES: CapabilityDef[] = [
@@ -185,11 +185,14 @@ export const CAPABILITIES: CapabilityDef[] = [
       },
       {
         id: "i19", label: "K8s node monitoring depth (%)",
-        description: "Ratio of K8s nodes to clusters — validates node-level cloud compute monitoring.",
-        query: "timeseries val=avg(dt.kubernetes.container.cpu_usage), by:{k8s.node.name} | fields k8s.node.name | dedup k8s.node.name | summarize c=count()",
+        description: "Percentage of K8s clusters with at least one monitored node — validates node-level cloud compute monitoring.",
+        query: `fetch dt.entity.kubernetes_cluster
+| fieldsAdd nodeCount = arraySize(toRelationships.isManagedBy)
+| filter nodeCount > 0
+| summarize count()`,
         queryB: "fetch dt.entity.kubernetes_cluster | summarize count()",
         applicabilityQuery: "fetch dt.entity.kubernetes_cluster | summarize count()",
-        thresholds: [{ min: 100 }, { min: 50 }, { min: 1 }],
+        thresholds: [{ min: 80 }, { min: 50 }, { min: 1 }],
       },
       {
         id: "i20", label: "Cloud namespace metric coverage (%)",
@@ -290,7 +293,7 @@ export const CAPABILITIES: CapabilityDef[] = [
       {
         id: "a10", label: "Multi-service trace depth (%)",
         description: "Percentage of traces spanning 2+ services — validates distributed tracing depth.",
-        query: "fetch spans, from:now()-2h | summarize services = countDistinct(dt.service.name), by: {trace.id} | filter services > 1 | summarize count()",
+        query: "fetch spans, from:now()-2h | summarize services = countDistinct(coalesce(dt.entity.service, service.name)), by: {trace.id} | filter services > 1 | summarize count()",
         queryB: "fetch spans, from:now()-2h | summarize countDistinct(trace.id)",
         thresholds: [{ min: 30 }, { min: 10 }, { min: 1 }],
       },
@@ -566,7 +569,7 @@ export const CAPABILITIES: CapabilityDef[] = [
       {
         id: "l12", label: "Structured logging (%)",
         description: "Percentage of logs containing structured JSON content for better parsing and analysis.",
-        query: 'fetch logs | filter timestamp > now() - 2h | filter matchesPhrase(content, "{\\\"") | summarize count()',
+        query: `fetch logs | filter timestamp > now() - 2h | filter contains(content, '{"') | summarize count()`,
         queryB: "fetch logs | filter timestamp > now() - 2h | summarize count()",
         thresholds: [{ min: 50 }, { min: 20 }, { min: 1 }],
       },
@@ -597,6 +600,22 @@ export const CAPABILITIES: CapabilityDef[] = [
         query: "fetch logs | filter timestamp > now() - 2h | filter isNotNull(dt.entity.custom_device) | summarize count()",
         queryB: "fetch logs | filter timestamp > now() - 2h | summarize count()",
         thresholds: [{ min: 30 }, { min: 10 }, { min: 1 }],
+      },
+      {
+        id: "l17", label: "Dedicated log bucket usage (%)",
+        description: "Percentage of expected dedicated log buckets in use (out of 3) — enables cost-effective retention, tiered storage, and compliance-driven log separation.",
+        query: `fetch dt.system.buckets
+| filter type == "logs" and name != "default"
+| summarize count()`,
+        denominatorConstant: 3,
+        thresholds: [{ min: 100 }, { min: 33 }, { min: 1 }],
+      },
+      {
+        id: "l18", label: "Log-level severity diversity (%)",
+        description: "Percentage of severity levels being ingested (out of 5: ERROR, WARN, INFO, DEBUG, TRACE) — confirms log instrumentation captures the full spectrum.",
+        query: "fetch logs, from:now()-2h\n| summarize count = countDistinct(loglevel)",
+        denominatorConstant: 5,
+        thresholds: [{ min: 80 }, { min: 40 }, { min: 1 }],
       },
     ],
   },
@@ -694,7 +713,7 @@ export const CAPABILITIES: CapabilityDef[] = [
       {
         id: "t1", label: "Davis problem entity coverage (%)",
         description: "Percentage of hosts with entities affected by Davis AI problem detection in 72h.",
-        query: "fetch dt.davis.problems, from:now()-72h | filter not(dt.davis.is_duplicate) | fieldsAdd affected = affected_entity_ids | expand affected | summarize count = countDistinct(affected)",
+        query: "fetch dt.davis.problems, from:now()-72h | filter not(dt.davis.is_duplicate) | fieldsAdd affected = affected_entity_ids | expand affected | filter startsWith(affected, \"HOST-\") | summarize count = countDistinct(affected)",
         queryB: "fetch dt.entity.host | summarize count()",
         thresholds: [{ min: 20 }, { min: 5 }, { min: 1 }],
       },
@@ -727,9 +746,11 @@ export const CAPABILITIES: CapabilityDef[] = [
         thresholds: [{ min: 30 }, { min: 10 }, { min: 1 }],
       },
       {
-        id: "t6", label: "Log source threat coverage (%)",
-        description: "Ratio of distinct log sources to monitored hosts.",
-        query: "fetch logs | filter timestamp > now() - 2h | summarize countDistinct(log.source)",
+        id: "t6", label: "Host security log coverage (%)",
+        description: "Percentage of hosts with ERROR or WARN log events in the last 2h — validates threat signal generation per host.",
+        query: `fetch logs, from:now()-2h
+| filter loglevel == "ERROR" or loglevel == "WARN"
+| summarize count = countDistinct(dt.entity.host)`,
         queryB: "fetch dt.entity.host | summarize count()",
         thresholds: [{ min: 100 }, { min: 50 }, { min: 10 }],
       },
@@ -847,6 +868,39 @@ export const CAPABILITIES: CapabilityDef[] = [
         queryB: "fetch spans, from:now()-72h | summarize count()",
         applicabilityQuery: AI_SPANS_QUERY,
         thresholds: [{ min: 5 }, { min: 1 }],
+      },
+      {
+        id: "ai10", label: "AI latency tracking coverage (%)",
+        description: "Percentage of AI traces with latency (TTFT or duration) data for performance SLO tracking.",
+        query: `fetch spans, from:now()-72h
+| filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name)
+| filter isNotNull(gen_ai.server.time_to_first_token) or isNotNull(gen_ai.server.ttft) or duration > 0
+| summarize count = countDistinct(trace_id)`,
+        queryB: `fetch spans, from:now()-72h
+| filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name)
+| summarize count = countDistinct(trace_id)`,
+        applicabilityQuery: AI_SPANS_QUERY,
+        thresholds: [{ min: 50 }, { min: 20 }, { min: 1 }],
+      },
+      {
+        id: "ai11", label: "AI model diversity (%)",
+        description: "Percentage of expected AI models detected (out of 5 baseline models) — indicates coverage across providers and use cases.",
+        query: `fetch spans, from:now()-72h
+| filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name)
+| summarize count = countDistinct(gen_ai.request.model)`,
+        denominatorConstant: 5,
+        applicabilityQuery: AI_SPANS_QUERY,
+        thresholds: [{ min: 80 }, { min: 40 }, { min: 1 }],
+      },
+      {
+        id: "ai12", label: "AI operation type coverage (%)",
+        description: "Percentage of expected AI operation types detected (out of 5 baseline types: chat, embeddings, completions, etc.).",
+        query: `fetch spans, from:now()-72h
+| filter isNotNull(gen_ai.system) or isNotNull(gen_ai.provider.name)
+| summarize count = countDistinct(gen_ai.operation.name)`,
+        denominatorConstant: 5,
+        applicabilityQuery: AI_SPANS_QUERY,
+        thresholds: [{ min: 80 }, { min: 40 }, { min: 1 }],
       },
     ],
   },
@@ -997,6 +1051,29 @@ export const CAPABILITIES: CapabilityDef[] = [
         query: "fetch dt.entity.service | fieldsAdd t = tags | expand t | filter contains(toString(t), \"owner\") or contains(toString(t), \"team\") | summarize count = countDistinct(id)",
         queryB: "fetch dt.entity.service | summarize count()",
         thresholds: [{ min: 50 }, { min: 20 }, { min: 1 }],
+      },
+      {
+        id: "sd11", label: "SLO adoption coverage (%)",
+        description: "Percentage of services covered by at least one service level objective — the single strongest indicator of reliability engineering maturity.",
+        query: "fetch dt.entity.service_level_objective\n| summarize count()",
+        queryB: "fetch dt.entity.service\n| summarize count()",
+        thresholds: [{ min: 50 }, { min: 20 }, { min: 1 }],
+      },
+      {
+        id: "sd12", label: "Active SLO coverage (%)",
+        description: "Percentage of defined SLOs that are currently enabled and enforcing reliability targets.",
+        query: "fetch dt.entity.service_level_objective\n| filter enabled == true\n| summarize count()",
+        queryB: "fetch dt.entity.service_level_objective\n| summarize count()",
+        thresholds: [{ min: 80 }, { min: 50 }, { min: 1 }],
+      },
+      {
+        id: "sd13", label: "Automation workflow adoption (%)",
+        description: "Percentage of expected automation workflows active (out of 5 baseline) — indicates the team has moved from passive monitoring to active automated remediation.",
+        query: `fetch bizevents, from:now()-24h
+| filter event.type == "com.dynatrace.automations.workflow.run"
+| summarize count = countDistinct(workflow.id)`,
+        denominatorConstant: 5,
+        thresholds: [{ min: 100 }, { min: 40 }, { min: 1 }],
       },
     ],
   },
