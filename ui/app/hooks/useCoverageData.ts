@@ -7,6 +7,7 @@ import { scaleQuery, TIER_CONFIG, type ScaleTier } from "../scale-tier";
 import { classifySource, type InFlightPerfEntry, type PerfReport } from "../perf/types";
 import { buildReport, downloadReport } from "../perf/buildReport";
 import { QueryCache } from "../perf/queryCache";
+import { getTenantId } from "../utils/tenantId";
 
 export interface TierResult {
   total: number;
@@ -37,6 +38,10 @@ export interface CapabilityResult {
   consolidation: number;
   /** Effective utilization score (adjusted by consolidation when active). */
   effectiveUtilizationScore: number;
+  /** Number of criteria that returned an error or timeout. Excluded from
+   *  the capScore denominator (C6) so transient failures don't mask a
+   *  healthy tenant. The UI can surface this as a warning. */
+  errorCount: number;
 }
 
 export interface QueryStats {
@@ -315,6 +320,75 @@ export const FOUNDATION_WEIGHT = 60;
 export const BEST_PRACTICE_WEIGHT = 25;
 export const EXCELLENCE_WEIGHT = 15;
 
+export interface CapabilityUtilizationResult {
+  fPct: number;
+  bPct: number;
+  ePct: number;
+  effB: number;
+  effE: number;
+  utilizationScore: number;
+  utilizationBand: string;
+  foundation: TierResult;
+  bestPractice: TierResult;
+  excellence: TierResult;
+  level: 0 | 1 | 2 | 3;
+  levelLabel: string;
+}
+
+/**
+ * Computes the weighted utilization score for a set of criteria results.
+ * Extracted so ComparisonPage and other consumers can call it without
+ * re-implementing the formula inline.
+ *
+ * Input type matches the shape of CapabilityResult["criteriaResults"] items.
+ */
+export function computeCapabilityUtilization(
+  criteriaResults: { score: number; points: number; error: boolean; notApplicable: boolean; tier: CriterionTier }[],
+): CapabilityUtilizationResult {
+  const tierCounts = {
+    foundation:   { total: 0, passed: 0 },
+    bestPractice: { total: 0, passed: 0 },
+    excellence:   { total: 0, passed: 0 },
+  };
+  const tierScores = {
+    foundation:   { total: 0, score: 0 },
+    bestPractice: { total: 0, score: 0 },
+    excellence:   { total: 0, score: 0 },
+  };
+  for (const cr of criteriaResults) {
+    if (cr.notApplicable) continue;
+    const t = cr.tier;
+    tierCounts[t].total++;
+    tierScores[t].total++;
+    tierScores[t].score += cr.score;
+    if (!cr.error && cr.points > 0) tierCounts[t].passed++;
+  }
+  const fPct = tierScores.foundation.total   > 0 ? tierScores.foundation.score   / tierScores.foundation.total   / 100 : 0;
+  const bPct = tierScores.bestPractice.total > 0 ? tierScores.bestPractice.score / tierScores.bestPractice.total / 100 : 0;
+  const ePct = tierScores.excellence.total   > 0 ? tierScores.excellence.score   / tierScores.excellence.total   / 100 : 0;
+  const fPassPct = tierCounts.foundation.total   > 0 ? tierCounts.foundation.passed   / tierCounts.foundation.total   : 0;
+  const bPassPct = tierCounts.bestPractice.total > 0 ? tierCounts.bestPractice.passed / tierCounts.bestPractice.total : 0;
+  const ePassPct = tierCounts.excellence.total   > 0 ? tierCounts.excellence.passed   / tierCounts.excellence.total   : 0;
+  let level: 0 | 1 | 2 | 3 = 0;
+  let levelLabel = "Not Adopted";
+  if (fPassPct >= 0.5)                              { level = 1; levelLabel = "Foundation"; }
+  if (fPassPct >= 1.0 && bPassPct >= 0.5)           { level = 2; levelLabel = "Operational"; }
+  if (fPassPct >= 1.0 && bPassPct >= 1.0 && ePassPct >= 0.5) { level = 3; levelLabel = "Optimized"; }
+  // Progressive: BP only counts when Foundation >= 80%, Excellence only when BP >= 60%
+  const effB = fPct >= 0.8 ? bPct : 0;
+  const effE = effB >= 0.6 ? ePct : 0;
+  const utilizationScore = Math.round(fPct * FOUNDATION_WEIGHT + effB * BEST_PRACTICE_WEIGHT + effE * EXCELLENCE_WEIGHT);
+  const utilizationBand = utilizationScore >= 80 ? "Excellent" : utilizationScore >= 60 ? "Good" : utilizationScore >= 40 ? "Moderate" : utilizationScore >= 20 ? "Low" : "N/A";
+  return {
+    fPct, bPct, ePct, effB, effE,
+    utilizationScore, utilizationBand,
+    foundation: tierCounts.foundation,
+    bestPractice: tierCounts.bestPractice,
+    excellence: tierCounts.excellence,
+    level, levelLabel,
+  };
+}
+
 interface ExecutionResult {
   cache: Map<string, number>;
   totalScannedBytes: number;
@@ -552,8 +626,8 @@ export function useCoverageData(
         try {
           const envUrl = getEnvironmentUrl();
           if (envUrl) {
-            const m = envUrl.match(/\/\/([^.]+)/);
-            if (m) return m[1];
+            const id = getTenantId(envUrl);
+            if (id) return id;
           }
         } catch { /* ignore */ }
         return 'unknown-tenant';
@@ -770,51 +844,29 @@ export function useCoverageData(
           if (!isError && value > 0) details.push(`${criterion.label}: ${formatCriterionValue(value, !!criterion.queryB)}`);
         }
 
-        // Compute utilization per tier
-        const tierCounts = { foundation: { total: 0, passed: 0 }, bestPractice: { total: 0, passed: 0 }, excellence: { total: 0, passed: 0 } };
-        const tierScores = { foundation: { total: 0, score: 0 }, bestPractice: { total: 0, score: 0 }, excellence: { total: 0, score: 0 } };
-        for (const cr of criteriaResults) {
-          if (cr.notApplicable) continue;
-          const t = cr.tier;
-          tierCounts[t].total++;
-          tierScores[t].total++;
-          tierScores[t].score += cr.score;
-          if (!cr.error && cr.points > 0) tierCounts[t].passed++; // points is 0 or 1
-        }
-        const fPct = tierScores.foundation.total > 0 ? tierScores.foundation.score / tierScores.foundation.total / 100 : 0;
-        const bPct = tierScores.bestPractice.total > 0 ? tierScores.bestPractice.score / tierScores.bestPractice.total / 100 : 0;
-        const ePct = tierScores.excellence.total > 0 ? tierScores.excellence.score / tierScores.excellence.total / 100 : 0;
-        const fPassPct = tierCounts.foundation.total > 0 ? tierCounts.foundation.passed / tierCounts.foundation.total : 0;
-        const bPassPct = tierCounts.bestPractice.total > 0 ? tierCounts.bestPractice.passed / tierCounts.bestPractice.total : 0;
-        const ePassPct = tierCounts.excellence.total > 0 ? tierCounts.excellence.passed / tierCounts.excellence.total : 0;
-        let level: 0 | 1 | 2 | 3 = 0;
-        let levelLabel = "Not Adopted";
-        if (fPassPct >= 0.5) { level = 1; levelLabel = "Foundation"; }
-        if (fPassPct >= 1.0 && bPassPct >= 0.5) { level = 2; levelLabel = "Operational"; }
-        if (fPassPct >= 1.0 && bPassPct >= 1.0 && ePassPct >= 0.5) { level = 3; levelLabel = "Optimized"; }
-
-        // Progressive utilization: BP only counts if Foundation >= 80%, Excellence only if BP >= 60%
-        const effB = fPct >= 0.8 ? bPct : 0;
-        const effE = effB >= 0.6 ? ePct : 0;
-        const utilizationScore = Math.round((fPct * FOUNDATION_WEIGHT + effB * BEST_PRACTICE_WEIGHT + effE * EXCELLENCE_WEIGHT));
-        const utilizationBand = utilizationScore >= 80 ? "Excellent" : utilizationScore >= 60 ? "Good" : utilizationScore >= 40 ? "Moderate" : utilizationScore >= 20 ? "Low" : "N/A";
+        // Compute utilization per tier via shared formula (C5)
+        const util = computeCapabilityUtilization(criteriaResults);
+        const { utilizationScore, utilizationBand } = util;
 
         const utilization: UtilizationResult = {
-          foundation: tierCounts.foundation,
-          bestPractice: tierCounts.bestPractice,
-          excellence: tierCounts.excellence,
-          level,
-          levelLabel,
+          foundation: util.foundation,
+          bestPractice: util.bestPractice,
+          excellence: util.excellence,
+          level: util.level,
+          levelLabel: util.levelLabel,
           utilizationScore,
           utilizationBand,
         };
 
-        const applicableCriteria = criteriaResults.filter(cr => !cr.notApplicable);
-        const capScore = applicableCriteria.length > 0
-          ? Math.round(applicableCriteria.reduce((sum, cr) => sum + cr.score, 0) / applicableCriteria.length)
+        // C6: exclude both notApplicable AND errored criteria from the
+        // denominator — a timed-out query should not drag down a healthy score.
+        const scorableCriteria = criteriaResults.filter(cr => !cr.notApplicable && !cr.error);
+        const errorCount = criteriaResults.filter(cr => cr.error).length;
+        const capScore = scorableCriteria.length > 0
+          ? Math.round(scorableCriteria.reduce((sum, cr) => sum + cr.score, 0) / scorableCriteria.length)
           : 0;
 
-        return { name: cap.name, color: cap.color, score: capScore, rawScore: capScore, details, criteriaResults, utilization, consolidation: 100, effectiveUtilizationScore: utilizationScore };
+        return { name: cap.name, color: cap.color, score: capScore, rawScore: capScore, details, criteriaResults, utilization, consolidation: 100, effectiveUtilizationScore: utilizationScore, errorCount };
       });
 
       // Log summary
@@ -924,8 +976,8 @@ export function useCoverageData(
     try {
       const envUrl = getEnvironmentUrl();
       if (envUrl) {
-        const m = envUrl.match(/\/\/([^.]+)/);
-        if (m) return m[1];
+        const id = getTenantId(envUrl);
+        if (id) return id;
       }
     } catch { /* ignore */ }
     const h = typeof window !== "undefined" ? window.location.hostname : "unknown";
@@ -960,8 +1012,8 @@ export function useCoverageData(
       try {
         const envUrl = getEnvironmentUrl();
         if (envUrl) {
-          const m = envUrl.match(/\/\/([^.]+)/);
-          if (m) return m[1];
+          const id = getTenantId(envUrl);
+          if (id) return id;
         }
       } catch { /* ignore */ }
       return 'unknown-tenant';

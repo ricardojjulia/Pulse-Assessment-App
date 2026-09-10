@@ -118,21 +118,26 @@ export function usePreflight() {
     setDone(false);
     setChecks(PROBE_QUERIES.map(p => ({ id: p.id, label: p.label, scope: p.scope, status: "running" })));
 
-    for (const probe of PROBE_QUERIES) {
+    // All probes fire simultaneously — total time = max(individual times) rather
+    // than sum. Each .then() updates state as the individual probe resolves so
+    // the UI shows results progressively without waiting for all to finish.
+    const probePromises = PROBE_QUERIES.map(probe => {
       if (probe.id === "spans" && simulateNoTraces()) {
         setChecks(prev => prev.map(c => c.id === probe.id
           ? { ...c, status: "not-entitled", detail: "Simulated (dev): Query failed: TRACE_QUERY_ENTITLEMENT_MISSING" }
           : c));
-        continue;
+        return Promise.resolve();
       }
-      const result = await probeQuery(probe.query);
-      const status: PreflightCheck["status"] = result.ok
-        ? "ok"
-        : probe.id === "spans" && result.entitlement
-          ? "not-entitled"
-          : "fail";
-      setChecks(prev => prev.map(c => c.id === probe.id ? { ...c, status, detail: result.detail } : c));
-    }
+      return probeQuery(probe.query).then(result => {
+        const status: PreflightCheck["status"] = result.ok
+          ? "ok"
+          : probe.id === "spans" && result.entitlement
+            ? "not-entitled"
+            : "fail";
+        setChecks(prev => prev.map(c => c.id === probe.id ? { ...c, status, detail: result.detail } : c));
+      });
+    });
+    await Promise.allSettled(probePromises);
     setRunning(false);
     setDone(true);
   }, [validated]);

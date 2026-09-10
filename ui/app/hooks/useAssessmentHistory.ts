@@ -13,6 +13,9 @@ export interface AssessmentSnapshot {
     score: number;
     /** Consolidation factor (0–100). Defaults to 100 if absent (backwards compat). */
     consolidation?: number;
+    /** Weighted utilization score (0–100). Optional for backward compatibility
+     *  with snapshots saved before T4 was shipped; callers should use `|| 0`. */
+    utilizationScore?: number;
     criteriaResults: {
       id: string;
       label: string;
@@ -173,13 +176,23 @@ async function deleteSnapshotsFromDocStore(ids: string[], remoteIds?: Set<string
 
 /* ── Hook ── */
 
-export function useAssessmentHistory() {
+/**
+ * @param enabled  When false (the default), the Document Store fetch is
+ *                 skipped entirely — only localStorage is loaded.  Pass
+ *                 `true` when the caller actually needs the full remote
+ *                 history (e.g., on the /compare route) to avoid an
+ *                 unnecessary Grail round-trip on every page load (T5).
+ */
+export function useAssessmentHistory(enabled: boolean = false) {
   const [snapshots, setSnapshots] = useState<AssessmentSnapshot[]>(loadLocal);
   const syncedRef = useRef(false);
   const remoteIdsRef = useRef(new Set<string>());
 
-  // Load from Document Store on mount and merge with localStorage
+  // Load from Document Store when enabled, then merge with localStorage (T5).
+  // The syncedRef guard prevents repeated fetches if the caller toggles
+  // enabled on/off or the component re-renders with the same value.
   useEffect(() => {
+    if (!enabled) return;
     if (syncedRef.current) return;
     syncedRef.current = true;
     loadFromDocStore().then(({ snapshots: remote, remoteDocIds }) => {
@@ -201,7 +214,7 @@ export function useAssessmentHistory() {
       persistLocal(keep);
       if (removeIds.length > 0) deleteSnapshotsFromDocStore(removeIds, remoteIdsRef.current);
     });
-  }, []);
+  }, [enabled]);
 
   const saveSnapshot = useCallback((capabilities: CapabilityResult[], totalScore: number, tenant: string) => {
     const snap: AssessmentSnapshot = {
@@ -214,6 +227,7 @@ export function useAssessmentHistory() {
         color: c.color,
         score: c.rawScore,
         ...(c.consolidation < 100 ? { consolidation: c.consolidation } : {}),
+        utilizationScore: c.utilization.utilizationScore ?? 0,
         criteriaResults: c.criteriaResults.map((cr) => ({
           id: cr.id,
           label: cr.label,
