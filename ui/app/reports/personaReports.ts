@@ -22,13 +22,30 @@
 //                proxy marker; failing ones include remediation, doc
 //                link and the exact DQL. Reference for engineers.
 //
-// PDF font note: jsPDF standard fonts are WinAnsi — glyphs like ✓ ✗ ≈ ≥ →
-// are NOT available. Use OK/GAP/ERR badges, "~", ">=", "->" instead.
+// PDF font note: when NOTO_SANS_BASE64 is populated in fonts/notoSansSubset.ts,
+// a Noto Sans TTF subset is embedded — enabling ✓ ✗ ≈ ≥ → in PDFs.
+// When the font data is absent the code falls back to WinAnsi Helvetica with
+// ASCII workarounds (OK/GAP, >=, ->, ~).
 
 import { jsPDF } from "jspdf";
 import { CRITERION_REMEDIATION } from "../data/criterionRemediation";
 import { renderRadarToDataURL } from "../components/CovUtilRadar";
 import { renderScatterToDataURL, scatterAspectRatio } from "../components/CapabilityScatter";
+import { NOTO_SANS_BASE64, FONT_AVAILABLE } from "./fonts/notoSansSubset";
+
+/** Register the embedded Noto Sans subset with the jsPDF instance.
+ *  Returns true when the font was registered (FONT_AVAILABLE is true).
+ *  When false, callers fall back to WinAnsi Helvetica. */
+function registerPdfFonts(doc: jsPDF): boolean {
+  if (!FONT_AVAILABLE) return false;
+  doc.addFileToVFS("NotoSans-Regular.ttf", NOTO_SANS_BASE64);
+  doc.addFont("NotoSans-Regular.ttf", "NotoSans", "normal");
+  return true;
+}
+
+/** Font name to use for normal-weight body text. Bold headings continue
+ *  to use Helvetica (NotoSans subset ships regular weight only). */
+const BODY_FONT = FONT_AVAILABLE ? "NotoSans" : "helvetica";
 
 export type PersonaLang = "en" | "pt" | "es";
 export type ReportPersona = "executive" | "tactical" | "technical" | "custom";
@@ -224,9 +241,9 @@ const STRINGS: Record<PersonaLang, S> = {
       "Re-run this assessment after a batch of improvements lands; snapshots are saved for comparison.",
       "Track progress by improvements closed and coverage gained, not by elapsed time.",
     ],
-    currentVsTarget: (v, t) => `now ${v} -> target ${t}`,
+    currentVsTarget: (v, t) => `now ${v} ${FONT_AVAILABLE ? "→" : "->"} target ${t}`,
     techIntro: "Every criterion evaluated by the assessment, with live values, thresholds, and remediation for the failing ones.",
-    statusOk: "OK", statusGap: "GAP", statusErr: "ERR",
+    statusOk: FONT_AVAILABLE ? "✓" : "OK", statusGap: FONT_AVAILABLE ? "✗" : "GAP", statusErr: "ERR",
     statusDistTitle: "Check Status Distribution by Capability",
     trend: "TREND",
     adoptionTitle: "Who Actually Uses the Platform",
@@ -250,11 +267,11 @@ const STRINGS: Record<PersonaLang, S> = {
     stageMax: "Highest stage reached - focus shifts to standardization and continuous verification.",
     winsImpact: (n, pts) => `Closing the ${n} quick wins above adds ~+${pts}% coverage overall - the fastest measurable move toward the next stage.`,
     nextLevelTitle: "How to Reach the Next Level",
-    nlLine: (cur, next) => `${cur} -> ${next}`,
+    nlLine: (cur, next) => `${cur} ${FONT_AVAILABLE ? "→" : "->"} ${next}`,
     nlNeeds: (n) => `pass ${n} more check${n > 1 ? "s" : ""}:`,
     nlMaxed: "Optimized - model ceiling reached, keep monitoring.",
     tierShort: { foundation: "FND", bestPractice: "BP", excellence: "EXC" },
-    proxyNote: "~ proxy: measured via service metrics/topology (Traces on Grail not enabled).",
+    proxyNote: `${FONT_AVAILABLE ? "≈" : "~"} proxy: measured via service metrics/topology (Traces on Grail not enabled).`,
     remediation: "Remediation", docs: "Docs", queryLabel: "DQL",
     appendixTitle: "Appendix - Environment & Run",
     hosts: "Hosts", services: "Services", apps: "Web apps", clusters: "K8s clusters",
@@ -312,9 +329,9 @@ const STRINGS: Record<PersonaLang, S> = {
       "Rodar este assessment apos um lote de melhorias entrar; os snapshots ficam salvos para comparacao.",
       "Acompanhar o progresso por melhorias fechadas e cobertura ganha, nao por tempo decorrido.",
     ],
-    currentVsTarget: (v, t) => `hoje ${v} -> meta ${t}`,
+    currentVsTarget: (v, t) => `hoje ${v} ${FONT_AVAILABLE ? "→" : "->"} meta ${t}`,
     techIntro: "Todos os criterios avaliados pelo assessment, com valores reais, thresholds e remediacao para os reprovados.",
-    statusOk: "OK", statusGap: "GAP", statusErr: "ERR",
+    statusOk: FONT_AVAILABLE ? "✓" : "OK", statusGap: FONT_AVAILABLE ? "✗" : "GAP", statusErr: "ERR",
     statusDistTitle: "Distribuicao de Status dos Checks por Capacidade",
     trend: "TENDENCIA",
     adoptionTitle: "Quem Realmente Usa a Plataforma",
@@ -338,11 +355,11 @@ const STRINGS: Record<PersonaLang, S> = {
     stageMax: "Etapa maxima atingida - o foco passa a ser padronizacao e verificacao continua.",
     winsImpact: (n, pts) => `Fechar as ${n} vitorias rapidas acima adiciona ~+${pts}% de cobertura geral - o movimento mensuravel mais rapido rumo a proxima etapa.`,
     nextLevelTitle: "Como Alcancar o Proximo Nivel",
-    nlLine: (cur, next) => `${cur} -> ${next}`,
+    nlLine: (cur, next) => `${cur} ${FONT_AVAILABLE ? "→" : "->"} ${next}`,
     nlNeeds: (n) => `aprovar mais ${n} check${n > 1 ? "s" : ""}:`,
     nlMaxed: "Optimized - teto do modelo atingido, manter monitoramento.",
     tierShort: { foundation: "FND", bestPractice: "BP", excellence: "EXC" },
-    proxyNote: "~ proxy: medido via metricas de servico/topologia (Traces on Grail nao habilitado).",
+    proxyNote: `${FONT_AVAILABLE ? "≈" : "~"} proxy: medido via metricas de servico/topologia (Traces on Grail nao habilitado).`,
     remediation: "Remediacao", docs: "Docs", queryLabel: "DQL",
     appendixTitle: "Apendice - Ambiente & Execucao",
     hosts: "Hosts", services: "Servicos", apps: "Apps web", clusters: "Clusters K8s",
@@ -400,9 +417,9 @@ const STRINGS: Record<PersonaLang, S> = {
       "Ejecutar este assessment despues de que entre un lote de mejoras; los snapshots quedan guardados para comparar.",
       "Medir el progreso por mejoras cerradas y cobertura ganada, no por tiempo transcurrido.",
     ],
-    currentVsTarget: (v, t) => `hoy ${v} -> meta ${t}`,
+    currentVsTarget: (v, t) => `hoy ${v} ${FONT_AVAILABLE ? "→" : "->"} meta ${t}`,
     techIntro: "Todos los criterios evaluados por el assessment, con valores reales, umbrales y remediacion para los reprobados.",
-    statusOk: "OK", statusGap: "GAP", statusErr: "ERR",
+    statusOk: FONT_AVAILABLE ? "✓" : "OK", statusGap: FONT_AVAILABLE ? "✗" : "GAP", statusErr: "ERR",
     statusDistTitle: "Distribucion de Estado de Checks por Capacidad",
     adoptionTitle: "Quien Usa Realmente la Plataforma",
     adoptionIntro: (days, total) => `${total} personas abrieron alguna app de Dynatrace en los ultimos ${days} dias. La cobertura dice que el dato existe; esto dice si alguien lo esta mirando.`,
@@ -426,11 +443,11 @@ const STRINGS: Record<PersonaLang, S> = {
     stageMax: "Etapa maxima alcanzada - el foco pasa a estandarizacion y verificacion continua.",
     winsImpact: (n, pts) => `Cerrar los ${n} logros rapidos de arriba agrega ~+${pts}% de cobertura general - el movimiento medible mas rapido hacia la proxima etapa.`,
     nextLevelTitle: "Como Alcanzar el Proximo Nivel",
-    nlLine: (cur, next) => `${cur} -> ${next}`,
+    nlLine: (cur, next) => `${cur} ${FONT_AVAILABLE ? "→" : "->"} ${next}`,
     nlNeeds: (n) => `aprobar ${n} check${n > 1 ? "s" : ""} mas:`,
     nlMaxed: "Optimized - techo del modelo alcanzado, mantener monitoreo.",
     tierShort: { foundation: "FND", bestPractice: "BP", excellence: "EXC" },
-    proxyNote: "~ proxy: medido via metricas de servicio/topologia (Traces on Grail no habilitado).",
+    proxyNote: `${FONT_AVAILABLE ? "≈" : "~"} proxy: medido via metricas de servicio/topologia (Traces on Grail no habilitado).`,
     remediation: "Remediacion", docs: "Docs", queryLabel: "DQL",
     appendixTitle: "Apendice - Entorno y Ejecucion",
     hosts: "Hosts", services: "Servicios", apps: "Apps web", clusters: "Clusters K8s",
@@ -521,7 +538,13 @@ function lowestThreshold(thresholds: string): number {
   return nums.length ? Math.min(...nums) : 50;
 }
 
-const clean = (s: string) => s.replace(/≥/g, ">=").replace(/→/g, "->").replace(/≈/g, "~").replace(/[""]/g, '"').replace(/·/g, "-");
+const clean = (s: string) => {
+  // When the Noto Sans subset is available the PDF can render ≥ → ≈ directly;
+  // strip them to ASCII only as a fallback for WinAnsi Helvetica.
+  let r = s.replace(/[""]/g, '"').replace(/·/g, "-");
+  if (!FONT_AVAILABLE) r = r.replace(/≥/g, ">=").replace(/→/g, "->").replace(/≈/g, "~");
+  return r;
+};
 const stripPct = (label: string) => label.replace(/\s*\(%\)\s*$/, "");
 
 interface FailingCheck {
@@ -600,6 +623,7 @@ export function buildPersonaReport(
   const T = STRINGS[lang];
 
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  registerPdfFonts(pdf);
   const W = 210, H = 297, M = 15, CW = W - 2 * M;
   let y = 0;
 
@@ -621,7 +645,7 @@ export function buildPersonaReport(
     y += 15;
   };
   const bodyText = (text: string, size = 8.5, color: [number, number, number] = [190, 195, 220], indent = 0, maxW = CW - indent) => {
-    pdf.setFontSize(size); pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(size); pdf.setFont(BODY_FONT, "normal");
     pdf.setTextColor(color[0], color[1], color[2]);
     const lines = pdf.splitTextToSize(clean(text), maxW);
     for (const ln of lines) {
@@ -639,7 +663,7 @@ export function buildPersonaReport(
     pdf.setTextColor(232, 232, 240);
     pdf.setFontSize(22); pdf.setFont("helvetica", "bold");
     pdf.text(clean(personaTitle), W / 2, 24, { align: "center" });
-    pdf.setFontSize(9); pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(9); pdf.setFont(BODY_FONT, "normal");
     pdf.setTextColor(140, 145, 180);
     pdf.text(`${tenant}  -  ${date || new Date().toLocaleDateString()}`, W / 2, 32, { align: "center" });
     y = 42;
@@ -695,7 +719,7 @@ export function buildPersonaReport(
   const covVsMatChart = () => {
     // legend
     ensureSpace(8);
-    pdf.setFontSize(6); pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(6); pdf.setFont(BODY_FONT, "normal");
     pdf.setFillColor(80, 180, 255); pdf.rect(M, y - 2.4, 3, 2.4, "F");
     pdf.setTextColor(TXT_DIM[0], TXT_DIM[1], TXT_DIM[2]);
     pdf.text(T.legCoverage, M + 4.5, y);
@@ -720,7 +744,7 @@ export function buildPersonaReport(
       pdf.setFillColor(24, 28, 52); pdf.rect(bx, y + 3, bw, 2.4, "F");
       pdf.setFillColor(180, 130, 255);
       if (cap.utilization.utilizationScore > 0) pdf.rect(bx, y + 3, Math.max(1, bw * cap.utilization.utilizationScore / 100), 2.4, "F");
-      pdf.setFontSize(6.5); pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(6.5); pdf.setFont(BODY_FONT, "normal");
       pdf.setTextColor(80, 180, 255);
       pdf.text(`${cap.score}%`, bx + bw + 2, y + 2.2);
       pdf.setTextColor(180, 130, 255);
@@ -736,7 +760,7 @@ export function buildPersonaReport(
     ensureSpace(gh + 14);
     const gx = M + 8, gw = CW - 12;
     // y gridlines + labels
-    pdf.setFontSize(5.5); pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(5.5); pdf.setFont(BODY_FONT, "normal");
     for (const g of [0, 25, 50, 75, 100]) {
       const yy = y + gh - gh * g / 100;
       pdf.setDrawColor(GRID[0], GRID[1], GRID[2]); pdf.setLineWidth(0.15);
@@ -1072,9 +1096,9 @@ export function buildPersonaReport(
       pdf.setFontSize(7.5); pdf.setFont("helvetica", "bold");
       pdf.setTextColor(240, 228, 200);
       pdf.text(`${stripPct(clean(f.cr.label))}  (${f.cap})`, M, y);
-      pdf.setFont("helvetica", "normal"); pdf.setFontSize(7);
+      pdf.setFont(BODY_FONT, "normal"); pdf.setFontSize(7);
       pdf.setTextColor(255, 200, 90);
-      pdf.text(`${f.cr.value}% vs >=${f.th}%  -  ${T.gapPts(f.gap.toFixed(0))}`, W - M, y, { align: "right" });
+      pdf.text(`${f.cr.value}% vs ${FONT_AVAILABLE ? "≥" : ">="}${f.th}%  -  ${T.gapPts(f.gap.toFixed(0))}`, W - M, y, { align: "right" });
       y += 4;
       gapBar(M, CW - 40, f.cr.value, f.th, hexToRgb(f.capColor));
       y += 4.5;
@@ -1104,7 +1128,7 @@ export function buildPersonaReport(
           Math.round(b.color[2] * (reached ? 1 : 0.28)),
         );
         pdf.rect(x0, y + 3, x1 - x0 - 0.8, 4, "F");
-        pdf.setFontSize(5.5); pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(5.5); pdf.setFont(BODY_FONT, "normal");
         pdf.setTextColor(TXT_DIM[0], TXT_DIM[1], TXT_DIM[2]);
         pdf.text(b.label, (x0 + x1) / 2, y + 10.5, { align: "center" });
       }
@@ -1166,14 +1190,14 @@ export function buildPersonaReport(
     y += 3;
     for (const f of failing.slice(0, 10)) {
       ensureSpace(8);
-      pdf.setFontSize(6.5); pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(6.5); pdf.setFont(BODY_FONT, "normal");
       pdf.setTextColor(210, 214, 235);
       const lbl = `${stripPct(clean(f.cr.label))} (${f.cap})`;
       pdf.text(lbl.length > 62 ? lbl.slice(0, 62) + "..." : lbl, M, y);
       y += 3.4;
       gapBar(M, CW - 44, f.cr.value, f.th, hexToRgb(f.capColor));
       pdf.setFontSize(6.5); pdf.setTextColor(255, 200, 90);
-      pdf.text(`${f.cr.value}% -> ${f.th}%`, W - M, y - 0.4, { align: "right" });
+      pdf.text(`${f.cr.value}% ${FONT_AVAILABLE ? "→" : "->"} ${f.th}%`, W - M, y - 0.4, { align: "right" });
       y += 3.6;
     }
     y += 3;
@@ -1222,7 +1246,7 @@ export function buildPersonaReport(
       pdf.roundedRect(bx, y, bw, 4, 1, 1, "F");
       pdf.setFillColor(rgb[0], rgb[1], rgb[2]);
       pdf.roundedRect(bx, y, Math.max(2, bw * (g.pts / maxPts)), 4, 1, 1, "F");
-      pdf.setFontSize(7); pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7); pdf.setFont(BODY_FONT, "normal");
       pdf.setTextColor(120, 230, 180);
       pdf.text(`+${g.pts.toFixed(1)}%`, bx + bw + 3, y + 3.4);
       pdf.setTextColor(TXT_DIM[0], TXT_DIM[1], TXT_DIM[2]);
@@ -1251,7 +1275,7 @@ export function buildPersonaReport(
       pdf.setFontSize(9.5); pdf.setFont("helvetica", "bold");
       pdf.setTextColor(rgb[0], rgb[1], rgb[2]);
       pdf.text(clean(T.teamLabel(g.team)), M, y);
-      pdf.setFontSize(7); pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7); pdf.setFont(BODY_FONT, "normal");
       pdf.setTextColor(TXT_DIM[0], TXT_DIM[1], TXT_DIM[2]);
       pdf.text(T.teamSummary(g.items.length, g.pts.toFixed(1)), W - M, y, { align: "right" });
       y += 5;
@@ -1272,9 +1296,9 @@ export function buildPersonaReport(
         const capN = capabilities.find(c => c.name === f.cap)?.criteriaResults.length ?? 1;
         const gain = ((100 / capN) / capabilities.length).toFixed(1);
         const unlock = unlockIds.get(f.cap)?.has(f.cr.id) ? `  -  ${T.unlockTag}` : "";
-        pdf.setFont("helvetica", "normal"); pdf.setFontSize(7);
+        pdf.setFont(BODY_FONT, "normal"); pdf.setFontSize(7);
         pdf.setTextColor(TXT_DIM[0], TXT_DIM[1], TXT_DIM[2]);
-        pdf.text(`${T.currentVsTarget(`${f.cr.value}%`, `>=${f.th}%`)}  (${T.tierShort[f.cr.tier]}, ${effort})`, M + 7, y);
+        pdf.text(`${T.currentVsTarget(`${f.cr.value}%`, `${FONT_AVAILABLE ? "≥" : ">="}${f.th}%`)}  (${T.tierShort[f.cr.tier]}, ${effort})`, M + 7, y);
         pdf.setTextColor(120, 230, 180);
         pdf.text(`${T.ptsOverall(gain)}${unlock}`, W - M, y, { align: "right" });
         y += 3.4;
@@ -1301,7 +1325,7 @@ export function buildPersonaReport(
       pdf.roundedRect(bx, y, bw, 4, 1, 1, "F");
       pdf.setFillColor(rgb[0], rgb[1], rgb[2]);
       if (cap.score > 0) pdf.roundedRect(bx, y, Math.max(2, bw * cap.score / 100), 4, 1, 1, "F");
-      pdf.setFontSize(7); pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7); pdf.setFont(BODY_FONT, "normal");
       pdf.setTextColor(190, 195, 220);
       pdf.text(`${cap.score}%  -  ${clean(cap.utilization.levelLabel)}  -  ${gaps} gaps`, bx + bw + 3, y + 3.4);
       y += 7.5;
@@ -1319,14 +1343,14 @@ export function buildPersonaReport(
       pdf.setFontSize(8); pdf.setFont("helvetica", "bold");
       pdf.setTextColor(rgb[0], rgb[1], rgb[2]);
       pdf.text(clean(cap.name), M, y);
-      pdf.setFont("helvetica", "normal"); pdf.setFontSize(7.5);
+      pdf.setFont(BODY_FONT, "normal"); pdf.setFontSize(7.5);
       pdf.setTextColor(210, 214, 235);
       pdf.text(plan.next ? T.nlLine(plan.current, plan.next) : T.nlMaxed, W - M, y, { align: "right" });
       y += 4;
       if (plan.next && plan.needed.length > 0) {
         bodyText(T.nlNeeds(plan.needed.length), 7, TXT_DIM, 4);
         for (const n of plan.needed.slice(0, 5)) {
-          bodyText(`- ${stripPct(clean(n.cr.label))}: ${n.cr.value}% vs >=${n.th}% (${T.tierShort[n.cr.tier]})`, 7, [190, 195, 220], 8);
+          bodyText(`- ${stripPct(clean(n.cr.label))}: ${n.cr.value}% vs ${FONT_AVAILABLE ? "≥" : ">="}${n.th}% (${T.tierShort[n.cr.tier]})`, 7, [190, 195, 220], 8);
         }
         if (plan.needed.length > 5) bodyText(`+${plan.needed.length - 5}...`, 7, TXT_DIM, 8);
       }
@@ -1352,7 +1376,7 @@ export function buildPersonaReport(
       pdf.setTextColor(210, 214, 235);
       pdf.text(clean(cap.name), M, y);
       statusStrip(M + 62, CW - 62 - 14, ok, gapN, errN);
-      pdf.setFontSize(6.5); pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(6.5); pdf.setFont(BODY_FONT, "normal");
       pdf.setTextColor(TXT_DIM[0], TXT_DIM[1], TXT_DIM[2]);
       pdf.text(`${ok + gapN + errN}`, W - M, y, { align: "right" });
       y += 6;
@@ -1372,7 +1396,7 @@ export function buildPersonaReport(
       } else if (plan.needed.length > 0) {
         bodyText(`${T.nextLevelTitle}: ${T.nlLine(plan.current, plan.next)} - ${T.nlNeeds(plan.needed.length)}`, 7.5, [160, 200, 255]);
         for (const n of plan.needed) {
-          bodyText(`- ${n.cr.id}  ${stripPct(clean(n.cr.label))}: ${n.cr.value}% vs >=${n.th}% (${T.tierShort[n.cr.tier]})`, 6.5, TXT_DIM, 4);
+          bodyText(`- ${n.cr.id}  ${stripPct(clean(n.cr.label))}: ${n.cr.value}% vs ${FONT_AVAILABLE ? "≥" : ">="}${n.th}% (${T.tierShort[n.cr.tier]})`, 6.5, TXT_DIM, 4);
         }
       }
       y += 2;
@@ -1390,13 +1414,17 @@ export function buildPersonaReport(
         const badge: [string, [number, number, number]] = cr.error
           ? [T.statusErr, [255, 120, 120]]
           : [T.statusGap, [255, 170, 90]];
-        pdf.setFontSize(6.5); pdf.setFont("helvetica", "bold");
+        // Badge: use NotoSans when available so ✓/✗ symbols render; fall back to
+        // helvetica-bold for WinAnsi (OK/GAP text is fine in bold).
+        pdf.setFontSize(6.5);
+        pdf.setFont(FONT_AVAILABLE ? "NotoSans" : "helvetica", FONT_AVAILABLE ? "normal" : "bold");
         pdf.setTextColor(badge[1][0], badge[1][1], badge[1][2]);
         pdf.text(badge[0], M, y);
         pdf.setFontSize(8); pdf.setTextColor(235, 210, 190);
-        const proxyTag = cr.proxied ? "  [~ proxy]" : "";
+        const proxyTag = cr.proxied ? `  [${FONT_AVAILABLE ? "≈" : "~"} proxy]` : "";
+        pdf.setFont(BODY_FONT, "normal");
         pdf.text(`${stripPct(clean(cr.label))}${proxyTag}`, M + 10, y);
-        pdf.setFont("helvetica", "normal");
+        pdf.setFont(BODY_FONT, "normal");
         pdf.setFontSize(7); pdf.setTextColor(TXT_DIM[0], TXT_DIM[1], TXT_DIM[2]);
         pdf.text(`${cr.value}${cr.isRatio ? "%" : ""}  vs  ${clean(cr.thresholds)}   ${T.tierShort[cr.tier]}`, W - M, y, { align: "right" });
         y += 4;
@@ -1421,7 +1449,7 @@ export function buildPersonaReport(
             pdf.text(ln, M + 10, y);
             y += 2.8;
           }
-          pdf.setFont("helvetica", "normal");
+          pdf.setFont(BODY_FONT, "normal");
           y += 2;
         } else {
           y += 0.5;
@@ -1516,7 +1544,7 @@ export function buildPersonaReport(
   const pages = pdf.getNumberOfPages();
   for (let i = 1; i <= pages; i++) {
     pdf.setPage(i);
-    pdf.setFontSize(6); pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(6); pdf.setFont(BODY_FONT, "normal");
     pdf.setTextColor(90, 95, 130);
     pdf.text(T.footer(tenant, date), M, H - 8);
     pdf.text(T.page(i, pages), W - M, H - 8, { align: "right" });
