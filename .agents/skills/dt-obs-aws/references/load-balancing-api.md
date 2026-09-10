@@ -79,8 +79,9 @@ Check multi-AZ distribution:
 
 ```dql
 smartscapeNodes "AWS_ELASTICLOADBALANCINGV2_LOADBALANCER"
-| fields name, aws.resource.id, aws.availability_zone
-| expand aws.availability_zone
+| parse aws.availability_zone, "JSON_ARRAY:availability_zones"
+| expand availability_zone = availability_zones
+| fields name, aws.resource.id, availability_zone
 ```
 
 ## Security & Networking
@@ -89,13 +90,14 @@ List security groups attached to load balancers:
 
 ```dql
 smartscapeNodes "AWS_ELASTICLOADBALANCINGV2_LOADBALANCER"
-| fields name, aws.resource.id, aws.security_group.id
-| expand aws.security_group.id
+| parse aws.security_group.id, "JSON_ARRAY:security_groups"
+| expand security_group.id = security_groups
+| fields name, aws.resource.id, security_group.id
 ```
 
 Filter LBs by VPC:
 
-```dql
+```dql-template
 smartscapeNodes "AWS_ELASTICLOADBALANCINGV2_LOADBALANCER"
 | filter aws.vpc.id == "<VPC_ID>"
 | fields name, aws.resource.id, aws.subnet.id

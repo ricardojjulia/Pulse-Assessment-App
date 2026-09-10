@@ -1,6 +1,6 @@
 {
   "name": "esa-tenant-evaluator",
-  "version": "2.5.14",
+  "version": "2.5.15",
   "private": true,
   "scripts": {
     "start": "env -u DEBUG npm_config_update_notifier=false npx dt-app dev",

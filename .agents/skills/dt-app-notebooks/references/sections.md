@@ -1,439 +1,136 @@
 # Notebook Sections
 
-Reference for notebook section types and their structure. Sections are stored in the `sections` array and executed sequentially.
+Sections are stored in `content.sections` as an ordered array. Each section has
+its own `id` field. Section types: `markdown` and `dql`.
 
 ## Section Types
 
-Notebooks support three main section types: **markdown**, **dql**, and **function**.
-
 ### Markdown Sections
 
-Markdown sections display formatted text content. They are typically used for documentation, headers, and explanations within the notebook.
-
 ```json
-{
-  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "type": "markdown",
-  "markdown": "# Welcome\n\nThis is a **markdown** section."
-}
+{ "id": "1", "type": "markdown", "markdown": "# Section Header" }
 ```
-
-**Properties:**
-- `id`: Unique section identifier (UUID) (required)
-- `type`: Set to `"markdown"` (required)
-- `markdown`: String containing markdown or HTML content (required)
-
-**Use Cases:**
-- Investigation documentation
-- Section headers and dividers
-- Findings and conclusions
-- Instructions and notes
 
 ### DQL Sections
 
-DQL sections execute DQL queries and visualize results. These are the primary sections for displaying metrics, logs, and other observability data.
-
 ```json
 {
-  "id": "query-section-1",
-  "type": "dql",
-  "title": "Error Rate Over Time",
-  "showTitle": true,
+  "id": "2", "type": "dql", "title": "Section Name",
   "showInput": true,
-  "height": 600,
   "state": {
-    "input": {
-      "value": "fetch logs | filter status == \"ERROR\" | summarize count()",
-      "timeframe": {
-        "from": "now()-2h",
-        "to": "now()"
-      }
-    },
+    "input": { "value": "timeseries avg(metric), by:{dimension}" },
     "visualization": "lineChart",
-    "visualizationSettings": {},
+    "visualizationSettings": { "autoSelectVisualization": true, "chartSettings": {} },
     "querySettings": {
-      "maxResultRecords": 1000
+      "maxResultRecords": 1000, "defaultScanLimitGbytes": 500,
+      "maxResultMegaBytes": 1, "defaultSamplingRatio": 10, "enableSampling": false
     }
   }
 }
 ```
 
-**Core Properties:**
+Optional properties: `showTitle`, `height`, `drilldownPath`, `filterSegments`, `davis`.
 
-**Required:**
-- `id`: Unique section identifier (UUID)
-- `type`: Set to `"dql"`
+**Section properties:**
+- `autoSelectVisualization` (boolean, in `visualizationSettings`) — when
+  `true`, Dynatrace automatically picks the best visualization. **Prefer
+  `true` unless the user requested a specific visualization.** When `false`,
+  `state.visualization` must be set explicitly.
+- `showTitle` (boolean) — show/hide section title
+- `showInput` (boolean, default `true`) — show/hide query editor. Keep `true`
+  unless told otherwise
+- `height` (number, px) — section height (default ~400)
 
-**Optional:**
-- `title`: Section title displayed above the visualization
-- `showInput`: Whether to show the DQL query editor (default: `true`)
-- `height`: Section height in pixels (default: 400)
-- `state`: Complete query execution state (see State Structure below)
+## Visualization Types and Required Field Types
 
-### DQL Section State
+Each visualization requires specific field types in the query result. If the
+query produces wrong types, the section renders blank or errors. Field types
+correspond to DQL output types: `timestamp`, `timeframe`, `long`, `double`,
+`duration`, `string`, `numericArray` (array of long/double — output of
+`timeseries`/`makeTimeseries` value columns).
 
-The `state` object contains the query and visualization configuration:
+**Legend:** R = required, O = optional, C = conditional.
 
-```json
-{
-  "input": {
-    "value": "fetch logs | summarize count()",
-    "timeframe": {
-      "from": "now()-2h",
-      "to": "now()"
-    }
-  },
-  "visualization": "table",
-  "visualizationSettings": {},
-  "querySettings": {
-    "maxResultRecords": 1000,
-    "defaultScanLimitGbytes": 500,
-    "maxResultMegaBytes": 50,
-    "defaultSamplingRatio": 10000,
-    "enableSampling": false
-  }
-}
-```
+### Time-Series Charts
 
-**State Properties:**
+**`lineChart`**, **`areaChart`**, **`barChart`**: Display metric data over time.
 
-- `input`: Query input parameters
-  - `value`: The DQL query string (required)
-  - `timeframe`: Time range for the query
-  - `filterSegments`: Additional filters applied
+| Slot | Accepted types | Count | Req |
+|------|---------------|-------|-----|
+| Time | timestamp, timeframe | 1 | R |
+| Interval | duration | 1 | C — required when Values is numericArray |
+| Values | long, double, duration, numericArray | 1+ | R |
+| Names | any | 1+ | O |
 
-- `visualization`: Selected visualization type (see Visualization Types below)
+When the query uses `timeseries` or `makeTimeseries`, values are numericArrays
+and the `interval` field (duration) must be present. If you pipe through
+`| fields` after `timeseries`, always include `interval` and `timeframe`.
 
-- `visualizationSettings`: Type-specific visualization configuration
+**`bandChart`**: Same as above plus two additional required numericArray slots
+for band min and band max values.
 
-- `querySettings`: Query execution parameters
-  - `maxResultRecords`: Maximum records to return
-  - `defaultScanLimitGbytes`: Scan data limit in GB
-  - `maxResultMegaBytes`: Result size limit in MB
-  - `defaultSamplingRatio`: Sampling ratio (e.g., 10000 = 1:10000)
-  - `enableSampling`: Whether sampling is enabled
+### Categorical Charts
 
-### Function Sections
+**`categoricalBarChart`**, **`pieChart`**, **`donutChart`**: Show values
+grouped by categories.
 
-Function sections execute JavaScript/TypeScript code for data transformation and custom logic.
+| Slot | Accepted types | Count | Req |
+|------|---------------|-------|-----|
+| Values | long, double, duration | 1+ | R |
+| Categories | any | 1+ | R |
 
-```json
-{
-  "id": "function-section-1",
-  "type": "function",
-  "title": "Data Transformation",
-  "showInput": true,
-  "height": 500,
-  "state": {
-    "input": {
-      "value": "function transform(data) {\n  return data.map(x => x * 2);\n}"
-    },
-    "visualization": "table"
-  }
-}
-```
+Typical query pattern: `summarize <agg>, by:{category}`.
 
-**Properties:**
-- `id`: Unique section identifier (UUID) (required)
-- `type`: Set to `"function"` (required)
-- `title`: Section title
-- `showInput`: Whether to show the code editor
-- `height`: Section height in pixels
-- `state`: Execution state (similar structure to DQL section)
+**`barChart` vs `categoricalBarChart`:** `barChart` is a **time-series** chart
+requiring a timestamp/timeframe axis. For "values per category" (e.g. request
+count per service), use `categoricalBarChart`. If you use `barChart` with
+`summarize ... by:{category}` (no time axis), the section will fail validation.
 
-## Visualization Types
+**Timeseries data in categorical charts:** If you need to show summarized
+metrics (not over time), first convert the timeseries arrays to scalars using
+array functions (`arrayAvg`, `arraySum`, etc.), then use
+`categoricalBarChart`.
 
-DQL sections support various visualization types through the `visualization` property:
+### Single Value
 
-| Visualization | Description | Best For |
-|--------------|-------------|----------|
-| `table` | Tabular data display | Raw data, logs, detailed records |
-| `lineChart` | Line chart | Time series, trends |
-| `areaChart` | Area chart | Cumulative metrics, stacked time series |
-| `barChart` | Bar chart | Comparisons, categorical data |
-| `categoricalBarChart` | Categorical bar chart | Non-time-based categories |
-| `pieChart` | Pie chart | Proportions, distributions |
-| `donutChart` | Donut chart | Proportions with center label |
-| `singleValue` | Single metric display | KPIs, aggregated values |
-| `bandChart` | Band chart | Range/confidence intervals |
-| `histogram` | Histogram | Distribution analysis |
-| `honeycomb` | Honeycomb chart | Entity relationships |
-| `raw` | Raw JSON output | Debugging |
+**`singleValue`**: Displays a single metric.
 
-**Selecting Visualization:**
+| Slot | Accepted types | Count | Req |
+|------|---------------|-------|-----|
+| Single value | any | 1 | R |
+| Sparkline | numericArray | 1 | O |
 
-Set `autoSelectVisualization: true` in `visualizationSettings` to let Dynatrace automatically choose the best visualization based on query results. Otherwise, explicitly specify the `visualization` type.
+### Tabular
+
+**`table`**, **`raw`**, **`recordView`**: Any data shape. No field-type
+requirements.
+
+### Distribution / Status
+
+**`histogram`**: Shows distribution of values.
+
+| Slot | Accepted types | Count | Req |
+|------|---------------|-------|-----|
+| Range | range (object with start/end) | 1 | R |
+| Values | long, double, duration | 1 | R |
+| Names | any | 1+ | O |
+
+**`honeycomb`**: Grid of colored cells.
+
+| Slot | Accepted types | Count | Req |
+|------|---------------|-------|-----|
+| Values | long, double, duration | 1 | R |
+| Names | any | 1+ | O |
 
 ## Visualization Settings
 
-Settings are visualization-specific and control display options.
+See [assets/visualization-settings.reference.jsonc](../assets/visualization-settings.reference.jsonc)
+for the complete per-visualization settings reference.
 
-### Table Settings
+Common settings across visualizations: `legend`, `tooltip`, `zoom`,
+`unitsOverrides`, `coloring`, `thresholds`, `colorModeType`.
 
-```json
-{
-  "table": {
-    "hideColumnsForLargeResults": false,
-    "columnOrder": ["[\"timestamp\"]", "[\"status\"]", "[\"message\"]"],
-    "linewrapEnabled": true,
-    "lineWrapIds": [["content"]],
-    "columnWidths": {
-      "[\"content\"]": 500
-    }
-  }
-}
-```
-
-**Table Properties:**
-- `hideColumnsForLargeResults`: Auto-hide columns when result set is large
-- `columnOrder`: Array of column names in display order (JSON-stringified arrays)
-- `linewrapEnabled`: Enable text wrapping
-- `lineWrapIds`: Columns that should wrap text
-- `columnWidths`: Column width overrides in pixels
-
-### Chart Settings
-
-```json
-{
-  "chartSettings": {
-    "legend": {
-      "hidden": false
-    },
-    "colorPalette": "log-level",
-    "fieldMapping": {
-      "leftAxisValues": ["count"],
-      "timestamp": "timeframe"
-    },
-    "curve": "smooth",
-    "pointsDisplay": "never"
-  },
-  "thresholds": [
-    {
-      "field": "count",
-      "isEnabled": true,
-      "rules": [
-        {
-          "color": {
-            "Default": "var(--dt-colors-critical-default)"
-          },
-          "comparator": "≥",
-          "value": 100,
-          "label": "Critical"
-        }
-      ]
-    }
-  ]
-}
-```
-
-**Chart Properties:**
-- `legend`: Legend display settings
-- `colorPalette`: Color scheme (`"log-level"`, `"default"`, etc.)
-- `fieldMapping`: Maps query fields to chart axes
-  - `leftAxisValues`: Fields for left Y-axis
-  - `rightAxisValues`: Fields for right Y-axis
-  - `timestamp`: Field used as X-axis (time)
-- `curve`: Line smoothing (`"smooth"`, `"linear"`, `"step"`)
-- `pointsDisplay`: Data point markers (`"never"`, `"always"`, `"auto"`)
-
-**Thresholds:**
-- `field`: Field to apply threshold to
-- `isEnabled`: Whether threshold is active
-- `rules`: Array of threshold rules
-  - `comparator`: Comparison operator (`≥`, `>`, `<`, `≤`, `=`)
-  - `value`: Threshold value
-  - `color`: Color to apply when rule matches
-  - `label`: Label for the threshold
-
-### Single Value Settings
-
-```json
-{
-  "singleValue": {
-    "recordField": "count",
-    "aggregation": "last",
-    "sparkline": {
-      "enabled": true
-    }
-  }
-}
-```
-
-**Single Value Properties:**
-- `recordField`: Field to display
-- `aggregation`: How to aggregate multiple values (`"last"`, `"first"`, `"avg"`, `"sum"`, `"min"`, `"max"`)
-- `sparkline`: Mini trend chart display settings
-
-## Common Section Properties
-
-### Timeframe
-
-Timeframes can be set at the notebook level (default) or per section:
-
-```json
-{
-  "from": "now()-2h",
-  "to": "now()"
-}
-```
-
-**Common Patterns:**
-- Last 2 hours: `"from": "now()-2h"`, `"to": "now()"`
-- Last 24 hours: `"from": "now()-24h"`, `"to": "now()"`
-- Last 7 days: `"from": "now()-7d"`, `"to": "now()"`
-- Absolute: ISO 8601 timestamps (e.g., `"2026-01-27T10:00:00.000Z"`)
-
-### Section Height
-
-Control vertical space for each section:
-
-- **Default**: 400px
-- **Single Value**: 200-300px
-- **Charts**: 400-600px
-- **Tables**: 500-800px (depending on data)
-
-```json
-{
-  "height": 600
-}
-```
-
-### Query Input Visibility
-
-Control whether the DQL query editor is visible:
-
-```json
-{
-  "showInput": true  // Show query editor
-}
-```
-
-**When to hide:**
-- Polished notebooks for sharing
-- KPI dashboards
-- Executive summaries
-
-**When to show:**
-- Investigation notebooks
-- Learning/documentation
-- Collaborative analysis
-
-## Section Examples
-
-### Example 1: Investigation Header
-
-```json
-{
-  "id": "intro-section",
-  "type": "markdown",
-  "markdown": "# Production Error Investigation\n\n**Date:** 2026-02-06\n**Issue:** High error rate on payment service\n\n## Objective\nIdentify the root cause of the error spike."
-}
-```
-
-### Example 2: KPI Single Value
-
-```json
-{
-  "id": "total-errors",
-  "type": "dql",
-  "title": "Total Errors",
-  "showInput": false,
-  "height": 200,
-  "state": {
-    "input": {
-      "value": "fetch logs | filter loglevel == \"ERROR\" | summarize count()"
-    },
-    "visualization": "singleValue",
-    "visualizationSettings": {
-      "singleValue": {
-        "recordField": "count",
-        "aggregation": "last"
-      }
-    }
-  }
-}
-```
-
-### Example 3: Time Series Chart
-
-```json
-{
-  "id": "error-trend",
-  "type": "dql",
-  "title": "Error Rate Over Time",
-  "height": 400,
-  "state": {
-    "input": {
-      "value": "fetch logs | filter loglevel == \"ERROR\" | summarize count(), by: {bin(timestamp, 5m)}"
-    },
-    "visualization": "lineChart",
-    "visualizationSettings": {
-      "chartSettings": {
-        "curve": "smooth",
-        "legend": {
-          "hidden": false
-        }
-      }
-    }
-  }
-}
-```
-
-### Example 4: Detailed Table
-
-```json
-{
-  "id": "error-details",
-  "type": "dql",
-  "title": "Recent Error Logs",
-  "height": 600,
-  "state": {
-    "input": {
-      "value": "fetch logs | filter loglevel == \"ERROR\" | sort timestamp desc | limit 100"
-    },
-    "visualization": "table",
-    "visualizationSettings": {
-      "table": {
-        "linewrapEnabled": true,
-        "lineWrapIds": [["content"]],
-        "columnWidths": {
-          "[\"content\"]": 500
-        }
-      }
-    }
-  }
-}
-```
-
-## Best Practices
-
-### Structure
-1. **Start with markdown** - Provide context before showing data
-2. **Logical flow** - Order sections to tell a story
-3. **Group related queries** - Separate groups with markdown headers
-
-### Titles
-1. **DQL sections** - Always provide descriptive titles
-2. **Clear and concise** - "Error Count by Service" not "Query 1"
-3. **Consistent style** - Title case or sentence case throughout
-
-### Heights
-1. **Single values** - 200-300px
-2. **Charts** - 400-600px
-3. **Tables** - 500-800px based on expected row count
-4. **Adjust as needed** - Based on actual data volume
-
-### Visualizations
-1. **Match data shape** - Time series → line charts, aggregations → bar charts
-2. **Auto-select first** - Use `autoSelectVisualization: true` initially
-3. **Refine later** - Switch to explicit types for final notebooks
-
-### Query Settings
-1. **Set limits** - Always use `limit` in queries or `maxResultRecords` in settings
-2. **Scan limits** - Configure `defaultScanLimitGbytes` for large datasets
-3. **Enable sampling** - For exploratory queries on massive datasets
-
-## Related Documentation
-
-- [analyzing.md](./analyzing.md) - Extract information from notebooks
-- [create-update.md](./create-update.md) - Create and modify notebooks
+**Visualization tip:** when you don't have a strong reason to pick a specific
+visualization, set `visualizationSettings.autoSelectVisualization: true` and
+omit `state.visualization` — Dynatrace picks a sensible default for the query
+result.
