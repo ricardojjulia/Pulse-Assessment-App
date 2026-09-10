@@ -2,10 +2,7 @@ import React, { useRef, useEffect, useCallback, useState, useImperativeHandle, f
 import { useCurrentTheme } from "@dynatrace/strato-components/core";
 import { Flex } from "@dynatrace/strato-components/layouts";
 import { scoreBand, SCORE_BANDS } from "../utils/colors";
-
-function hexToRgb(h: string) { return { r: parseInt(h.slice(1, 3), 16), g: parseInt(h.slice(3, 5), 16), b: parseInt(h.slice(5, 7), 16) }; }
-function rgba(c: { r: number; g: number; b: number }, a: number) { return `rgba(${c.r},${c.g},${c.b},${a})`; }
-function lighten(c: { r: number; g: number; b: number }, v: number) { return { r: Math.min(255, c.r + v), g: Math.min(255, c.g + v), b: Math.min(255, c.b + v) }; }
+import { hexToRgb, rgba, lighten, wrapText } from "../utils/canvas";
 
 const bandForScore = scoreBand;
 
@@ -26,20 +23,6 @@ export function depthWord(utilization: number): string {
   if (utilization >= 40) return "basic";
   if (utilization >= 20) return "shallow";
   return "starter";
-}
-
-function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
-  if (ctx.measureText(text).width <= maxWidth) return [text];
-  const words = text.split(" ");
-  const lines: string[] = [];
-  let cur = words[0];
-  for (let i = 1; i < words.length; i++) {
-    const test = cur + " " + words[i];
-    if (ctx.measureText(test).width <= maxWidth) { cur = test; }
-    else { lines.push(cur); cur = words[i]; }
-  }
-  lines.push(cur);
-  return lines;
 }
 
 const BANDS = SCORE_BANDS;

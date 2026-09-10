@@ -2,10 +2,7 @@ import React, { useRef, useEffect, useCallback } from "react";
 import { useCurrentTheme } from "@dynatrace/strato-components/core";
 import type { CapabilityResult } from "../hooks/useCoverageData";
 import { scoreBand, SCORE_BANDS } from "../utils/colors";
-
-function hexToRgb(h: string) { return { r: parseInt(h.slice(1, 3), 16), g: parseInt(h.slice(3, 5), 16), b: parseInt(h.slice(5, 7), 16) }; }
-function rgba(c: { r: number; g: number; b: number }, a: number) { return `rgba(${c.r},${c.g},${c.b},${a})`; }
-function lighten(c: { r: number; g: number; b: number }, v: number) { return { r: Math.min(255, c.r + v), g: Math.min(255, c.g + v), b: Math.min(255, c.b + v) }; }
+import { hexToRgb, rgba, lighten } from "../utils/canvas";
 
 export function utilization(s: number) { return scoreBand(s); }
 
