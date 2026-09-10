@@ -10,6 +10,17 @@
 // draft to review, not an audited document.
 
 import { jsPDF } from "jspdf";
+import { NOTO_SANS_BASE64, FONT_AVAILABLE } from "./fonts/notoSansSubset";
+
+/** Register embedded Noto Sans subset so Unicode symbols render in PDFs. */
+function registerPdfFonts(doc: jsPDF): boolean {
+  if (!FONT_AVAILABLE) return false;
+  doc.addFileToVFS("NotoSans-Regular.ttf", NOTO_SANS_BASE64);
+  doc.addFont("NotoSans-Regular.ttf", "NotoSans", "normal");
+  return true;
+}
+
+const BODY_FONT = FONT_AVAILABLE ? "NotoSans" : "helvetica";
 
 export interface AiNarrativeMeta {
   title: string;
@@ -21,18 +32,31 @@ export interface AiNarrativeMeta {
   ask: string;
 }
 
-const clean = (s: string) =>
-  s
+const clean = (s: string) => {
+  // Strip markdown marks and normalise punctuation.
+  let r = s
     .replace(/\*\*(.+?)\*\*/g, "$1")
     .replace(/\*(.+?)\*/g, "$1")
     .replace(/`{1,3}/g, "")
-    .replace(/≥/g, ">=").replace(/→/g, "->").replace(/≈/g, "~")
-    .replace(/[""]/g, '"').replace(/·/g, "-").replace(/—/g, "-")
-    .replace(/[^\x20-\x7E]/g, "");
+    .replace(/[""]/g, '"')
+    .replace(/·/g, "-")
+    .replace(/—/g, "-");
+  if (FONT_AVAILABLE) {
+    // Noto Sans subset covers ≥ → ≈ and Latin-1 (U+00A0–U+00FF);
+    // strip only characters outside that range.
+    r = r.replace(/[^\x20-\x7E -ÿ→≈≠≥✓✗]/g, "");
+  } else {
+    // WinAnsi Helvetica fallback — collapse Unicode symbols to ASCII.
+    r = r.replace(/≥/g, ">=").replace(/→/g, "->").replace(/≈/g, "~");
+    r = r.replace(/[^\x20-\x7E]/g, "");
+  }
+  return r;
+};
 
 /** Build without saving — lets tests/preview harnesses render offline. */
 export function buildAiNarrativePdf(markdown: string, meta: AiNarrativeMeta): jsPDF {
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  registerPdfFonts(pdf);
   const W = 210, H = 297, M = 15, CW = W - 2 * M;
   let y = 0;
 
@@ -52,7 +76,7 @@ export function buildAiNarrativePdf(markdown: string, meta: AiNarrativeMeta): js
   const titleLines = pdf.splitTextToSize(clean(meta.title), CW);
   pdf.text(titleLines, W / 2, 23, { align: "center" });
   y = 23 + titleLines.length * 8;
-  pdf.setFontSize(9); pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9); pdf.setFont(BODY_FONT, "normal");
   pdf.setTextColor(140, 145, 180);
   pdf.text(`${meta.tenant}  -  ${meta.date}  -  Coverage ${meta.coverage}%  -  Utilization ${meta.utilization}/100`, W / 2, y, { align: "center" });
   y += 6;
@@ -81,7 +105,7 @@ export function buildAiNarrativePdf(markdown: string, meta: AiNarrativeMeta): js
     y += 5.5;
   };
   const paragraph = (text: string, indent = 0) => {
-    pdf.setFontSize(8.5); pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8.5); pdf.setFont(BODY_FONT, "normal");
     pdf.setTextColor(200, 205, 228);
     const lines = pdf.splitTextToSize(clean(text), CW - indent);
     for (const ln of lines) {
@@ -120,7 +144,7 @@ export function buildAiNarrativePdf(markdown: string, meta: AiNarrativeMeta): js
   const pages = pdf.getNumberOfPages();
   for (let i = 1; i <= pages; i++) {
     pdf.setPage(i);
-    pdf.setFontSize(6); pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(6); pdf.setFont(BODY_FONT, "normal");
     pdf.setTextColor(90, 95, 130);
     pdf.text(`Dynatrace Platform - Pulse Assessment  |  ${meta.tenant}  |  ${meta.date}`, M, H - 8);
     pdf.text(`Page ${i} / ${pages}`, W - M, H - 8, { align: "right" });
