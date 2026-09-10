@@ -34,18 +34,19 @@ import { renderScatterToDataURL, scatterAspectRatio } from "../components/Capabi
 import { NOTO_SANS_BASE64, FONT_AVAILABLE } from "./fonts/notoSansSubset";
 
 /** Register the embedded Noto Sans subset with the jsPDF instance.
- *  Returns true when the font was registered (FONT_AVAILABLE is true).
- *  When false, callers fall back to WinAnsi Helvetica. */
-function registerPdfFonts(doc: jsPDF): boolean {
-  if (!FONT_AVAILABLE) return false;
-  doc.addFileToVFS("NotoSans-Regular.ttf", NOTO_SANS_BASE64);
-  doc.addFont("NotoSans-Regular.ttf", "NotoSans", "normal");
-  return true;
+ *  Returns the font name to use: "NotoSans" on success, "helvetica" on
+ *  any failure (bad font data, jsPDF version mismatch, etc.). */
+function registerPdfFonts(doc: jsPDF): string {
+  if (!FONT_AVAILABLE) return "helvetica";
+  try {
+    doc.addFileToVFS("NotoSans-Regular.ttf", NOTO_SANS_BASE64);
+    doc.addFont("NotoSans-Regular.ttf", "NotoSans", "normal");
+    doc.setFont("NotoSans", "normal");
+    return "NotoSans";
+  } catch {
+    return "helvetica";
+  }
 }
-
-/** Font name to use for normal-weight body text. Bold headings continue
- *  to use Helvetica (NotoSans subset ships regular weight only). */
-const BODY_FONT = FONT_AVAILABLE ? "NotoSans" : "helvetica";
 
 export type PersonaLang = "en" | "pt" | "es";
 export type ReportPersona = "executive" | "tactical" | "technical" | "custom";
@@ -623,7 +624,7 @@ export function buildPersonaReport(
   const T = STRINGS[lang];
 
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  registerPdfFonts(pdf);
+  const BODY_FONT = registerPdfFonts(pdf);
   const W = 210, H = 297, M = 15, CW = W - 2 * M;
   let y = 0;
 

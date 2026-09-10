@@ -12,15 +12,19 @@
 import { jsPDF } from "jspdf";
 import { NOTO_SANS_BASE64, FONT_AVAILABLE } from "./fonts/notoSansSubset";
 
-/** Register embedded Noto Sans subset so Unicode symbols render in PDFs. */
-function registerPdfFonts(doc: jsPDF): boolean {
-  if (!FONT_AVAILABLE) return false;
-  doc.addFileToVFS("NotoSans-Regular.ttf", NOTO_SANS_BASE64);
-  doc.addFont("NotoSans-Regular.ttf", "NotoSans", "normal");
-  return true;
+/** Register embedded Noto Sans subset so Unicode symbols render in PDFs.
+ *  Returns the font name to use: "NotoSans" on success, "helvetica" on failure. */
+function registerPdfFonts(doc: jsPDF): string {
+  if (!FONT_AVAILABLE) return "helvetica";
+  try {
+    doc.addFileToVFS("NotoSans-Regular.ttf", NOTO_SANS_BASE64);
+    doc.addFont("NotoSans-Regular.ttf", "NotoSans", "normal");
+    doc.setFont("NotoSans", "normal");
+    return "NotoSans";
+  } catch {
+    return "helvetica";
+  }
 }
-
-const BODY_FONT = FONT_AVAILABLE ? "NotoSans" : "helvetica";
 
 export interface AiNarrativeMeta {
   title: string;
@@ -56,7 +60,7 @@ const clean = (s: string) => {
 /** Build without saving — lets tests/preview harnesses render offline. */
 export function buildAiNarrativePdf(markdown: string, meta: AiNarrativeMeta): jsPDF {
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  registerPdfFonts(pdf);
+  const BODY_FONT = registerPdfFonts(pdf);
   const W = 210, H = 297, M = 15, CW = W - 2 * M;
   let y = 0;
 
