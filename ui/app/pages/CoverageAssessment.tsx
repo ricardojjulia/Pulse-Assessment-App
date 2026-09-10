@@ -27,6 +27,7 @@ import { CRITERION_REMEDIATION } from "../data/criterionRemediation";
 import { APP_ICON } from "../data/appIcon";
 import { APP_VERSION } from "../appVersion";
 import { generatePersonaReport, type ReportPersona, type PersonaLang } from "../reports/personaReports";
+import { downloadCompleteMarkdownReport } from "../reports/generateCompleteMarkdownReport";
 import { CustomReportModal, type CustomReportRequest } from "../components/CustomReportModal";
 import { SmartReportModal } from "../components/SmartReportModal";
 import { usePreflight, type PreflightCheck } from "../hooks/usePreflight";
@@ -107,7 +108,14 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
   const [chartSize, setChartSize] = useState(500);
   const [isMobile, setIsMobile] = useState(false);
   const [selectedCap, setSelectedCap] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>("coverage");
+  const VIEW_MODE_KEY = 'pulse-assessment-view-mode';
+  const [viewMode, setViewMode] = useState<ViewMode>(
+    () => (localStorage.getItem(VIEW_MODE_KEY) as ViewMode) ?? 'coverage'
+  );
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode);
+    localStorage.setItem(VIEW_MODE_KEY, mode);
+  };
   const [collapseKey, setCollapseKey] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const mouseDownPos = useRef<{ x: number; y: number } | null>(null);
@@ -221,6 +229,21 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
       }
     }, 0);
   }, [capabilities, exporting, totalScore, overallUtilizationLevel, tenant, date, stats, entityCounts, history.snapshots]);
+
+  /* ── Markdown export — complete assessment as a single .md file ── */
+  const handleMarkdownExport = useCallback(() => {
+    if (capabilities.length === 0) return;
+    downloadCompleteMarkdownReport({
+      capabilities,
+      totalScore,
+      overallUtilizationLevel,
+      tenant: tenant ?? "",
+      date: date ?? "",
+      stats,
+      entityCounts,
+      snapshots: history.snapshots,
+    });
+  }, [capabilities, totalScore, overallUtilizationLevel, tenant, date, stats, entityCounts, history.snapshots]);
 
   /* ── Dynamic report: user-composed sections/capabilities/language ── */
   const generateCustomReport = useCallback((req: CustomReportRequest) => {
@@ -459,7 +482,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
             <Flex flexDirection="column" onClick={(e) => e.stopPropagation()} style={{ marginLeft: 4 }}>
               <SegmentedControl
                 value={viewMode}
-                onChange={setViewMode}
+                onChange={handleViewModeChange}
                 options={[
                   { value: "coverage", label: "Coverage" },
                   { value: "utilization", label: "Utilization" },
@@ -476,7 +499,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
                     background: Colors.Background.Surface.Default, borderRadius: 8,
                     padding: "1px 6px", minWidth: 14, textAlign: "center",
                     lineHeight: "14px",
-                  }}>{Math.min(history.snapshots.length, 12)}</Text>
+                  }}>{Math.min(history.snapshots.length, 52)}</Text>
                 </Button.Suffix>
               )}
             </Button>
@@ -511,6 +534,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
                   ))}
                   <Menu.Item onSelect={() => setShowSmartReport(true)}>Smart (Assist)…</Menu.Item>
                   <Menu.Item onSelect={() => setShowCustomReport(true)}>Custom…</Menu.Item>
+                  <Menu.Item onSelect={handleMarkdownExport}>Export Markdown</Menu.Item>
                 </Menu.Content>
               </Menu>
             )}

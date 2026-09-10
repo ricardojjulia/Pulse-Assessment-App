@@ -86,6 +86,7 @@ function deltaColor(d: number) {
   return Colors.Text.Neutral.Disabled;
 }
 
+// TODO: import computeCapabilityUtilization from useCoverageData when available and remove local copy.
 /** Compute utilization score for a capability's criteria using the CRITERION_TIERS lookup */
 function computeUtilization(criteria: { id: string; points: number; error: boolean }[]): number {
   const tiers = { foundation: { total: 0, passed: 0 }, bestPractice: { total: 0, passed: 0 }, excellence: { total: 0, passed: 0 } };
@@ -107,8 +108,8 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, saveSnapshot }) => 
   const dk = useCurrentTheme() === "dark";
   const navigate = useNavigate();
 
-  // Last 12 snapshots available for comparison
-  const available = useMemo(() => snapshots.slice(0, 12), [snapshots]);
+  // Last 52 snapshots available for comparison (one year of weekly assessments)
+  const available = useMemo(() => snapshots.slice(0, 52), [snapshots]);
   const [idxA, setIdxA] = useState(0);                 // A = newer (default: most recent)
   const [idxB, setIdxB] = useState(available.length > 1 ? 1 : 0); // B = older (default: second)
   const [selectedCap, setSelectedCap] = useState<string | null>(null);
