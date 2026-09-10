@@ -20,8 +20,10 @@ function registerPdfFonts(doc: jsPDF): string {
     doc.addFileToVFS("NotoSans-Regular.ttf", NOTO_SANS_BASE64);
     doc.addFont("NotoSans-Regular.ttf", "NotoSans", "normal");
     doc.setFont("NotoSans", "normal");
+    doc.getStringUnitWidth("A");
     return "NotoSans";
   } catch {
+    doc.setFont("helvetica", "normal");
     return "helvetica";
   }
 }

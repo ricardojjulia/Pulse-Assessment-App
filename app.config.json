@@ -5,7 +5,7 @@
     "name": "ESA Tenant Evaluator",
     "description": "Assess Dynatrace maturity, tenant configuration, and Gen3 adoption.",
     "icon": "ui/assets/icon.svg",
-    "version": "2.6.1",
+    "version": "2.6.2",
     "scopes": [
       { "name": "storage:logs:read", "comment": "Log Analytics coverage" },
       { "name": "storage:events:read", "comment": "Security, Delivery, Problems" },

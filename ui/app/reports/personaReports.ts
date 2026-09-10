@@ -42,8 +42,12 @@ function registerPdfFonts(doc: jsPDF): string {
     doc.addFileToVFS("NotoSans-Regular.ttf", NOTO_SANS_BASE64);
     doc.addFont("NotoSans-Regular.ttf", "NotoSans", "normal");
     doc.setFont("NotoSans", "normal");
+    // Probe width measurement — throws if the font's widths table is missing.
+    // This surfaces the failure here rather than mid-render.
+    doc.getStringUnitWidth("A");
     return "NotoSans";
   } catch {
+    doc.setFont("helvetica", "normal");
     return "helvetica";
   }
 }
