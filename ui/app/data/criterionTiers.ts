@@ -132,6 +132,9 @@ export const CRITERION_TIERS: Record<string, CriterionTier> = {
   ai7: "excellence",     // Guardrail coverage
   ai8: "excellence",     // Cost tracking coverage
   ai9: "excellence",     // AI tracing service breadth
+  ai10: "bestPractice",  // AI latency tracking coverage
+  ai11: "excellence",    // AI model diversity
+  ai12: "bestPractice",  // AI operation type coverage
 
   // ─── 8. BUSINESS OBSERVABILITY ───
   b1:  "foundation",     // Service bizevent coverage
@@ -154,6 +157,13 @@ export const CRITERION_TIERS: Record<string, CriterionTier> = {
   sd8: "excellence",     // Davis problem detection
   sd9: "bestPractice",   // Process group tagging
   sd10: "excellence",    // Ownership assignment
+  sd11: "bestPractice",  // SLO adoption coverage
+  sd12: "excellence",    // Active SLO coverage
+  sd13: "bestPractice",  // Automation workflow adoption
+
+  // ─── 4. LOG ANALYTICS (additional) ───
+  l17: "bestPractice",   // Dedicated log bucket usage
+  l18: "foundation",     // Log-level severity diversity
 
 
 };
