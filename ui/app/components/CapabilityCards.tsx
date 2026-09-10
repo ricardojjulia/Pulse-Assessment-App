@@ -50,6 +50,10 @@ interface Props {
    *  auto-fires this for the capability so the user gets an insight without
    *  an extra click (still gated by per-capability idempotence in the hook). */
   onRequestInsight?: (capabilityName: string) => Promise<void>;
+  /** Epoch ms when the Davis rate-limit window expires. Forwarded to
+   *  DavisInsightSection so 429 errors show a countdown instead of the
+   *  raw error text. */
+  rateLimitedUntil?: number;
   /** Optional Explain action — renders an "Explain" button on every card
    *  that opens Dynatrace Assist with a question about this capability's
    *  results. Provided only in dev (Assist surfaces are dev-only). */
@@ -166,7 +170,7 @@ const CriterionRow: React.FC<{ cr: CapabilityResult["criteriaResults"][0]; dk: b
   );
 };
 
-export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim, activeIdx, onSelect, viewMode, onDivergenceBadgeClick, davisRecommendations, onSendFollowUp, onRequestInsight, onExplain }) => {
+export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim, activeIdx, onSelect, viewMode, onDivergenceBadgeClick, davisRecommendations, onSendFollowUp, onRequestInsight, onExplain, rateLimitedUntil }) => {
   const dk = useCurrentTheme() === "dark";
 
   // NB: NO auto-fire on expand. The user explicitly opted out of implicit
@@ -342,6 +346,7 @@ export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim
                     capabilityName={cap.name}
                     onSendFollowUp={onSendFollowUp}
                     onRequestInsight={onRequestInsight}
+                    rateLimitedUntil={rateLimitedUntil}
                   />
                 )}
                 {cap.criteriaResults.map((cr) => (

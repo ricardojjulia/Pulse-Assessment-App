@@ -738,7 +738,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
               borderTop: isMobile ? `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}` : "none",
               maxHeight: isMobile ? "50vh" : undefined,
             }}>
-              <CapabilityCards capabilities={capabilities} anim={anim} activeIdx={activeIdx} onSelect={setActiveIdx} viewMode={viewMode} onDivergenceBadgeClick={handleDivergenceBadgeClick} davisRecommendations={davisHandle.byCapability} onSendFollowUp={davisHandle.sendFollowUp} onRequestInsight={davisHandle.requestInsight} onExplain={explainCapability} />
+              <CapabilityCards capabilities={capabilities} anim={anim} activeIdx={activeIdx} onSelect={setActiveIdx} viewMode={viewMode} onDivergenceBadgeClick={handleDivergenceBadgeClick} davisRecommendations={davisHandle.byCapability} onSendFollowUp={davisHandle.sendFollowUp} onRequestInsight={davisHandle.requestInsight} onExplain={explainCapability} rateLimitedUntil={davisHandle.rateLimitedUntil} />
             </Flex>
           </>) : viewMode === "utilization" ? (
             <UtilizationView capabilities={capabilities} dk={dk} text={text} textSec={textSec} textTert={textTert} overallUtilizationLevel={overallUtilizationLevel} collapseKey={collapseKey} isMobile={isMobile} adoptionByCapability={adoption.unavailable ? undefined : adoption.byCapability} adoptionTotalUsers={adoption.totalUsers} davisRecommendations={davisHandle.byCapability} onSendFollowUp={davisHandle.sendFollowUp} onRequestInsight={davisHandle.requestInsight} onExplain={() => { /* card expands itself; no Davis call here */ }} />

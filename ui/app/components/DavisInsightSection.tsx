@@ -26,6 +26,7 @@ import { Flex } from "@dynatrace/strato-components/layouts";
 import { Text, Strong } from "@dynatrace/strato-components/typography";
 import { Skeleton, SkeletonText } from "@dynatrace/strato-components/content";
 import type { DavisRecommendationState } from "../hooks/useDavisRecommendations";
+import { useCountdown } from "../hooks/useCountdown";
 
 interface Props {
   state: DavisRecommendationState | undefined;
@@ -39,6 +40,12 @@ interface Props {
    *  "idle", the component renders a "Generate AI insight" button that
    *  fires the initial Davis call for this capability. */
   onRequestInsight?: (capabilityName: string) => Promise<void>;
+  /** Epoch ms when the Davis rate-limit window expires, from the
+   *  useDavisRecommendations hook. When set and the countdown is active,
+   *  the error state shows "Rate limited — retry in MM:SS" instead of the
+   *  raw HTTP 429 message. When the countdown reaches zero, the normal error
+   *  state is shown; no auto-retry fires. Optional — backwards-compatible. */
+  rateLimitedUntil?: number;
 }
 
 /** Tiny markdown renderer — handles `**bold**`, `` `code` ``, `# heading`,
@@ -164,10 +171,11 @@ function renderInline(text: string, textColor: string, accentColor: string): Rea
   return parts;
 }
 
-export const DavisInsightSection: React.FC<Props> = ({ state, capabilityName, onSendFollowUp, onRequestInsight }) => {
+export const DavisInsightSection: React.FC<Props> = ({ state, capabilityName, onSendFollowUp, onRequestInsight, rateLimitedUntil }) => {
   const dk = useCurrentTheme() === "dark";
   const [draft, setDraft] = useState("");
   const [open, setOpen] = useState(true);
+  const countdown = useCountdown(rateLimitedUntil);
 
   if (!state || state.status === "skipped") return null;
 
@@ -308,38 +316,58 @@ export const DavisInsightSection: React.FC<Props> = ({ state, capabilityName, on
 
       {/* Error notice — surfaces the actual HTTP status, raw message, and
           an SE-actionable hint so the user can fix the cause without
-          opening DevTools. */}
+          opening DevTools.
+          When the error is a 429 and the rate-limit countdown is active,
+          we replace the generic error with a human-readable timer:
+            "Rate limited — retry in 14:23"
+          Once the countdown expires (label is null), we fall through to
+          the standard error UI. No auto-retry fires — user must click. */}
       {state.status === "error" && (
         <Flex flexDirection="column" gap={4}
           style={{ marginTop: state.conversation.length > 0 ? 6 : 2 }}>
-          <Text style={{
-            fontSize: 11, fontWeight: 700,
-            color: Colors.Text.Critical.Default,
-          }}>
-            {state.errorDetail?.status
-              ? `Davis CoPilot error (HTTP ${state.errorDetail.status})`
-              : "Davis CoPilot unavailable"}
-          </Text>
-          {state.errorDetail?.message && (
-            <Text style={{
-              fontSize: 11, color: textColor,
-              fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-              padding: "4px 6px", borderRadius: 3,
-              background: dk ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)",
-              wordBreak: "break-word",
-            }}>
-              {state.errorDetail.message}
-            </Text>
-          )}
-          {state.errorDetail?.hint && (
-            <Text style={{ fontSize: 11, color: subColor, lineHeight: 1.5 }}>
-              {state.errorDetail.hint}
-            </Text>
-          )}
-          {!state.errorDetail && state.conversation.length === 0 && (
-            <Text style={{ fontSize: 11, color: subColor, fontStyle: "italic" }}>
-              The static recommendation above still applies.
-            </Text>
+          {rateLimitedUntil !== undefined && countdown.label !== null ? (
+            // ── Rate-limit countdown ──────────────────────────────────
+            <Flex flexDirection="row" alignItems="center" gap={6}>
+              <Text style={{
+                fontSize: 11, fontWeight: 700,
+                color: Colors.Text.Warning.Default,
+              }}>
+                {`Rate limited — retry in ${countdown.label}`}
+              </Text>
+            </Flex>
+          ) : (
+            // ── Standard error display ────────────────────────────────
+            <>
+              <Text style={{
+                fontSize: 11, fontWeight: 700,
+                color: Colors.Text.Critical.Default,
+              }}>
+                {state.errorDetail?.status
+                  ? `Davis CoPilot error (HTTP ${state.errorDetail.status})`
+                  : "Davis CoPilot unavailable"}
+              </Text>
+              {state.errorDetail?.message && (
+                <Text style={{
+                  fontSize: 11, color: textColor,
+                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                  padding: "4px 6px", borderRadius: 3,
+                  background: dk ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)",
+                  wordBreak: "break-word",
+                }}>
+                  {state.errorDetail.message}
+                </Text>
+              )}
+              {state.errorDetail?.hint && (
+                <Text style={{ fontSize: 11, color: subColor, lineHeight: 1.5 }}>
+                  {state.errorDetail.hint}
+                </Text>
+              )}
+              {!state.errorDetail && state.conversation.length === 0 && (
+                <Text style={{ fontSize: 11, color: subColor, fontStyle: "italic" }}>
+                  The static recommendation above still applies.
+                </Text>
+              )}
+            </>
           )}
         </Flex>
       )}
