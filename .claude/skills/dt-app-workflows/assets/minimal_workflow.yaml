@@ -1,0 +1,15 @@
+title: "My Automation"
+schemaVersion: 4
+isPrivate: true
+trigger: {}
+tasks:
+  query_data:
+    action: dynatrace.automations:execute-dql-query
+    input:
+      query: |
+        fetch logs
+        | filter loglevel == "ERROR"
+        | limit 10
+    position:
+      x: 0
+      "y": 1

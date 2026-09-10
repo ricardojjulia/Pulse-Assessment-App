@@ -1,0 +1,154 @@
+{
+  "_comment": "SYNTHETIC reference shape — every figure is a deliberately round, obviously fake number (1,000/2,000/500…) so this file can never be mistaken for (or copy-pasted into) a real tenant's sheet. A prior version carried near-real figures from a live engagement; keep this file synthetic.",
+  "meta": {
+    "customer": "Acme Corp",
+    "tenant": "abc12345",
+    "window": "30d",
+    "effectiveness": 50.0,
+    "grade": "C",
+    "signal_quality": 40.0,
+    "native_adoption": 50.0,
+    "detector_tuning": 60.0,
+    "pui_rates": {
+      "root_cause": 0.1,
+      "impact_multi": 0.05,
+      "actionable": 0.9
+    },
+    "custom_alert_share": 0.5,
+    "total_problems": 10000,
+    "custom_rule_worklist": [
+      {
+        "title": "one flapping custom log detector (fires and auto-resolves within minutes)",
+        "fired": 2000,
+        "action": "disable — redundant with OOTB service detection"
+      },
+      {
+        "title": "a per-workload custom clone family (100 detectors, one metric key) — the OOTB equivalents are DISABLED",
+        "fired": 1000,
+        "action": "enable the OOTB detectors; delete the 100 custom clones"
+      },
+      {
+        "title": "a never-firing custom clone family (50 detectors, 0 fired) — pure config debt",
+        "fired": 0,
+        "action": "delete"
+      }
+    ]
+  },
+  "change_plan": [
+    {
+      "priority": 1,
+      "target": "flapping custom log detector",
+      "recommendation": "disable — redundant with OOTB service detection",
+      "est_reduction": "~20% of the stream",
+      "fired_30d": 2000
+    },
+    {
+      "priority": 2,
+      "target": "per-workload custom clone family (100 detectors)",
+      "recommendation": "replace with the OOTB workload detectors",
+      "est_reduction": "~10% of the stream",
+      "fired_30d": 1000
+    }
+  ],
+  "rules": {
+    "N21": {
+      "actual_prod": "auto: 200ms/50%, over-alert 1 min / 10 rpm",
+      "actual_lower": "same (env-wide)",
+      "status": "warn",
+      "recommendation": "raise degradation 50%->75%; over-alert 1->5 min",
+      "est_reduction": "[derived] ~half of 1,000 (transient <5-min blips)",
+      "priority": 4,
+      "fired_30d": 1000
+    },
+    "N23": {
+      "actual_prod": "auto: 5% abs / 50% rel, 5 min / 10 rpm",
+      "actual_lower": "same (env-wide)",
+      "status": "warn",
+      "recommendation": "raise relative 50%->125%",
+      "est_reduction": "[derived] ~third of 500",
+      "priority": 5,
+      "fired_30d": 500
+    },
+    "N22": {
+      "actual_prod": "auto: 1000ms/100% (slowest 10%)",
+      "actual_lower": "same",
+      "status": "opp",
+      "recommendation": "raise to 150%, 5-min window",
+      "est_reduction": "[derived] minor",
+      "priority": 9,
+      "fired_30d": 0
+    },
+    "N02": {
+      "actual_prod": "Dynatrace default (no config object)",
+      "actual_lower": "default",
+      "status": "opp",
+      "recommendation": "97% for 15 min (prod), 95% (lower)",
+      "est_reduction": "[derived] part of 100",
+      "priority": 7,
+      "fired_30d": 100
+    },
+    "N04": {
+      "actual_prod": "Dynatrace default (no config object)",
+      "actual_lower": "default",
+      "status": "opp",
+      "recommendation": "align to 90% both OS",
+      "est_reduction": "[derived] part of 200",
+      "priority": 8,
+      "fired_30d": 200
+    },
+    "N05": {
+      "actual_prod": "Dynatrace default (Automatic/baseline)",
+      "actual_lower": "default",
+      "status": "opp",
+      "recommendation": "baseline-driven — monitor; not threshold-tunable",
+      "est_reduction": "[derived] context-dependent",
+      "priority": 11,
+      "fired_30d": 200
+    },
+    "N18": {
+      "actual_prod": "Dynatrace default (no config object)",
+      "actual_lower": "default",
+      "status": "opp",
+      "recommendation": "keep default; watch after service tuning",
+      "est_reduction": "[derived] minor",
+      "priority": 10,
+      "fired_30d": 200
+    },
+    "N49": {
+      "actual_prod": "Enabled, threshold 1, 15 min — fires only on cronjobs",
+      "actual_lower": "Enabled (same)",
+      "status": "warn",
+      "recommendation": "exclude cronjob-kind workloads (all 2,000 are cronjobs); raise threshold above 1",
+      "est_reduction": "[counted] ~2,000 (100% cronjobs, fast auto-resolve)",
+      "priority": 3,
+      "fired_30d": 2000
+    },
+    "N47": {
+      "actual_prod": "Enabled, threshold 1, 5 min / 3 min",
+      "actual_lower": "Enabled (same)",
+      "status": "warn",
+      "recommendation": "keep (OOTB); the custom per-workload restart clones are the duplication — delete those",
+      "est_reduction": "[counted] full lower share of 100",
+      "priority": 6,
+      "fired_30d": 100
+    },
+    "N13": {
+      "actual_prod": "Dynatrace default (3% available)",
+      "actual_lower": "default",
+      "status": "opp",
+      "recommendation": "per-mount overrides (/,/var,/opt) at 5% free",
+      "est_reduction": "[derived] minor",
+      "priority": 12,
+      "fired_30d": 0
+    },
+    "N01": {
+      "actual_prod": "readable, no database services present",
+      "actual_lower": "same",
+      "status": "na",
+      "recommendation": "no action — technology absent",
+      "est_reduction": null,
+      "priority": null,
+      "fired_30d": 0
+    }
+  }
+}

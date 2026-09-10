@@ -1,0 +1,52 @@
+{
+  "_comment": "Per-tenant standards definition — the customer's own 'what good looks like' inputs that make the definition-gated KPIs (SSU non-admin split, SCI, FCS, MCS) fully scorable. Copy to standards.<tenantId>.json, fill in with the customer, and the Effective Consumption analysis reads it. Nothing here is guessed by the tool; an unfilled file leaves those KPIs excluded from the OES denominator (the normal ⚪ treatment). Gen3-first: list platform-native surfaces (source tags, host groups, segments) — never management zones or classic-tag-mapping targets.",
+
+  "tenantId": "abc12345",
+  "customer": "Acme Corp",
+
+  "requiredTagKeys": {
+    "_comment": "SCI/FCS foundation. Keys every host (and, where noted, service) should carry as SOURCE tags. SCI = mean over this set of (entities carrying the key / total entities); a key with zero coverage counts as 0, not omitted.",
+    "host": ["Team", "dt.owner", "environment"],
+    "service": ["dt.owner"]
+  },
+
+  "metadataPatterns": {
+    "_comment": "MCS. Regex each shared field's VALUE must match. PatternCompliance = entities whose value matches / entities carrying the key. Anchor your regexes.",
+    "environment": "^(prod|preprod|dev|qa)$",
+    "app_id": "^[A-Z0-9]{3,8}$",
+    "owner": "^[a-z0-9._-]+$"
+  },
+
+  "adminUserIds": [
+    "_comment_replace_with_real_ids: user.id values (or resolve from the admin/owner IAM groups below) that count as ADMINS. SSU = non-admin configurators / all configurators. Leave empty to fall back to participation-rate SSU (configurators / eligible users).",
+    "00000000-0000-0000-0000-000000000000"
+  ],
+  "adminGroups": ["Account Administrators", "Environment Admin"],
+
+  "targets": {
+    "_comment": "Optional overrides for the normalization constants. Omit to use defaults. queryDiversityBucketTarget replaces the hard-coded 15 in QEI; selfServiceParticipationTarget replaces the 0.2 (20% of eligible) scale gate; noisePenaltyCap replaces 0.5; tokenShareTarget is the CCS config-as-code nirvana (0.7); includeCCS folds CCS into the Automation pillar (the 2026-07-14 composition upgrade — set false to reproduce the source model); outlierFenceMultiplier is the k in median + k*IQR actor fencing.",
+    "queryDiversityBucketTarget": 15,
+    "selfServiceParticipationTarget": 0.2,
+    "noisePenaltyCap": 0.5,
+    "tokenShareTarget": 0.7,
+    "includeCCS": true,
+    "outlierFenceMultiplier": 3
+  },
+
+  "personaCounts": {
+    "_comment": "EUB (expected-users baseline) overrides — the customer's own ratios beat the rough defaults in effective-consumption.md §9b. expectedUsers, when set, is an actual platform-team headcount from the customer and replaces the whole estimate (removes the estimate caveat). EUB is context for engagement, never an OES input.",
+    "devsPerService": 0.3,
+    "srePerHostGroup": 1,
+    "ownersPerApp": 1,
+    "srePerSlo": 0.5,
+    "adminsPerCloudConnector": 2,
+    "securityIfAppSecActive": 2,
+    "expectedUsers": null
+  },
+
+  "oesWeights": {
+    "_comment": "Resolve the source model's weight conflict explicitly. 'code' = Signals .35 / Automation .35 / Foundation .20 / Engagement .10 (default); 'prose' = .35 / .20 / .10 / .35. Or set custom values that sum to 1.0.",
+    "profile": "code",
+    "custom": null
+  }
+}

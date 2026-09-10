@@ -1,0 +1,629 @@
+{
+  "version": "7",
+  "defaultTimeframe": {
+    "from": "now()-30d",
+    "to": "now()"
+  },
+  "defaultSegments": [],
+  "sections": [
+    {
+      "id": "0fe1a997-5704-4e0e-b134-67351fedf89a",
+      "type": "markdown",
+      "markdown": "# Effective Consumption \u2014 KPI scorecard\n\nLive DQL for the Effective Consumption model: **Signals \u00b7 Automation \u00b7 Foundation \u00b7 Engagement**, rolled up into an **Overall Effective Score (OES)**. Default window is **30 days**.\n\nEach KPI below is tagged: **\u2705 computable** (Grail-only), **\ud83d\udfe1 partial** (needs ticketing or an entity-coverage definition), **\ud83d\udd27 definition-gated** (needs the customer's required-tag / id-env-owner standard). Partial and gated KPIs are excluded from the OES denominator \u2014 never scored as 0.\n\n> **Gen3-first:** the Foundation KPIs are reframed to platform-native surfaces (host groups, segments, buckets, source tags). The absence of classic management zones / classic tags is *not* a gap."
+    },
+    {
+      "id": "bb7c3401-8b39-4882-95d0-b4f9b0cecd37",
+      "type": "markdown",
+      "markdown": "## 1 \u00b7 Self-Service Score  \u2705  *(SSU \u2295 COC, blended + scale-gated)*\nParticipation and ownership evenness of config changes, gated against a 20%-of-eligible target."
+    },
+    {
+      "id": "ffdb764d-d164-4d83-afe9-1a06c22059e4",
+      "type": "dql",
+      "filterSegments": [],
+      "drilldownPath": [],
+      "previousFilterSegments": [],
+      "height": 250,
+      "state": {
+        "input": {
+          "timeframe": {
+            "from": "now()-30d",
+            "to": "now()"
+          },
+          "value": "fetch dt.system.query_executions\n| filter isNull(client.internal_service_context)\n| summarize totalEligibleUsers = countDistinct(user.id)\n| append [\n    fetch dt.system.events\n    | filter event.kind == \"AUDIT_EVENT\" and isNull(authentication.token)\n    | filter isNotNull(details.dt.settings.object_summary)\n    | filterOut in(user.id, {\"UNKNOWN\", \"system\"})\n    | summarize changes = count(), by:{user.id}\n    | summarize totalChanges = sum(changes),\n                participatingUsers = countDistinct(user.id),\n                hhi = sum(changes*changes) / (sum(changes) * sum(changes))\n  ]\n| summarize totalEligibleUsers = max(toDouble(totalEligibleUsers)),\n            totalChanges = max(toDouble(totalChanges)),\n            participatingUsers = max(toDouble(participatingUsers)),\n            hhi = max(toDouble(hhi))\n| fieldsAdd hhi_Normalized = if(participatingUsers <= 1, 1.0, else: (hhi - 1/participatingUsers) / (1 - 1/participatingUsers))\n| fieldsAdd participationRate = participatingUsers/totalEligibleUsers\n| fieldsAdd participationRateCapped = if(participationRate > 1, 1, else: participationRate)\n| fieldsAdd evenness = 1 - hhi_Normalized\n| fieldsAdd selfServiceScore = round((0.3*participationRateCapped + 0.7*evenness)*100),\n            targetUsers = totalEligibleUsers*.2,\n            dailyChanges = round(totalChanges)/30\n| fieldsAdd scaleScore = if(participatingUsers > targetUsers, 1, else: participatingUsers/targetUsers)\n| fieldsAdd selfServiceTargetScore = round(selfServiceScore * scaleScore)"
+        },
+        "visualizationSettings": {
+          "table": {
+            "hideColumnsForLargeResults": true
+          },
+          "autoSelectVisualization": true,
+          "chartSettings": {}
+        },
+        "querySettings": {
+          "maxResultRecords": 1000,
+          "defaultScanLimitGbytes": 500,
+          "maxResultMegaBytes": 1,
+          "defaultSamplingRatio": 10,
+          "enableSampling": false
+        },
+        "visualization": "table"
+      },
+      "showTitle": true,
+      "title": "Self-Service Score"
+    },
+    {
+      "id": "108dc0bb-e9f3-4498-ae91-2576aa647376",
+      "type": "markdown",
+      "markdown": "## 2 \u00b7 COC \u2014 Config Ownership Concentration  \u2705\nHerfindahl index over config changes per user. Low = distributed (target \u2264 0.4). `OwnershipIndex = 1 \u2212 COC` feeds OES."
+    },
+    {
+      "id": "bc2ab38f-b071-4454-9f97-ed4b38cd04f3",
+      "type": "dql",
+      "filterSegments": [],
+      "drilldownPath": [],
+      "previousFilterSegments": [],
+      "height": 250,
+      "state": {
+        "input": {
+          "timeframe": {
+            "from": "now()-30d",
+            "to": "now()"
+          },
+          "value": "fetch dt.system.events\n| filter event.kind == \"AUDIT_EVENT\" and isNull(authentication.token)\n| filter isNotNull(details.dt.settings.object_summary)\n| filterOut in(user.id, {\"UNKNOWN\", \"system\"})\n| summarize changes = count(), by:{user.id}\n| summarize COC = sum(changes*changes)/(sum(changes)*sum(changes)),\n            participants = countDistinct(user.id),\n            totalChanges = sum(changes)\n| fieldsAdd OwnershipIndex = 1 - COC"
+        },
+        "visualizationSettings": {
+          "table": {
+            "hideColumnsForLargeResults": true
+          },
+          "autoSelectVisualization": true,
+          "chartSettings": {}
+        },
+        "querySettings": {
+          "maxResultRecords": 1000,
+          "defaultScanLimitGbytes": 500,
+          "maxResultMegaBytes": 1,
+          "defaultSamplingRatio": 10,
+          "enableSampling": false
+        },
+        "visualization": "table"
+      },
+      "showTitle": true,
+      "title": "COC / OwnershipIndex"
+    },
+    {
+      "id": "f2402ca3-278c-4e98-909e-7ee3e8b48ffc",
+      "type": "markdown",
+      "markdown": "## 2a \u00b7 Outlier fence \u2014 actor-distribution guard *(run before COC / SSU / QEI)*\nA single automation actor running under a user identity (terraform-runner, monaco service account) can out-change every human combined and make HHI meaningless. Fence per-actor change counts at **median + 3\u00d7IQR**. Actors above the fence: name them in a side-note, **exclude them from the human-engagement math** (COC / SSU / self-service) and **count them toward the automation story** (CCS below) \u2014 they are usually misclassified config-as-code, not a self-service participant. If nothing trips, report \"no outliers fenced\" as method color \u2014 don't invent one. The same fence applies to any hotspot list (top config types, top buckets, top users by change count)."
+    },
+    {
+      "id": "14b8d5d4-4bb8-4bff-a343-c8bb43e86393",
+      "type": "dql",
+      "filterSegments": [],
+      "drilldownPath": [],
+      "previousFilterSegments": [],
+      "height": 250,
+      "state": {
+        "input": {
+          "timeframe": {
+            "from": "now()-30d",
+            "to": "now()"
+          },
+          "value": "fetch dt.system.events\n| filter event.kind==\"AUDIT_EVENT\" and isNull(authentication.token) and isNotNull(details.dt.settings.object_summary)\n| filterOut in(user.id, {\"UNKNOWN\",\"system\"})\n| summarize changes=count(), by:{user.id}\n| summarize users=count(), p25=percentile(changes,25), p50=percentile(changes,50), p75=percentile(changes,75), maxChanges=max(changes)\n| fieldsAdd outlierFence = p50 + 3*(p75 - p25)"
+        },
+        "visualizationSettings": {
+          "table": {
+            "hideColumnsForLargeResults": true
+          },
+          "autoSelectVisualization": true,
+          "chartSettings": {}
+        },
+        "querySettings": {
+          "maxResultRecords": 1000,
+          "defaultScanLimitGbytes": 500,
+          "maxResultMegaBytes": 1,
+          "defaultSamplingRatio": 10,
+          "enableSampling": false
+        },
+        "visualization": "table"
+      },
+      "showTitle": true,
+      "title": "Outlier fence (median + 3\u00d7IQR)"
+    },
+    {
+      "id": "4a3b845f-907d-41f9-80d0-4558a7aa15df",
+      "type": "markdown",
+      "markdown": "## 2b \u00b7 CCS \u2014 Config-as-Code Share  \u2705\nThe automation-side complement to COC: the share of **all** settings changes that are **token-driven** (Terraform / Monaco / API). Target **\u2265 0.7** \u2014 a tenant under source control, with humans making declarative-drift changes on top. Low CCS + high human change volume = a click-ops estate: every change manual, unreviewed, unreproducible. Secondary read on `tokenActors`: \u2265 5 \u2705 \u00b7 2\u20134 \ud83d\udca1 \u00b7 0\u20131 \u26a0\ufe0f (no config-as-code practice); actors fenced by the outlier guard above join this count. Feeds the **Automation** pillar \u2014 see the OES tile."
+    },
+    {
+      "id": "cec8400e-cd56-4e57-aa04-c5c2e490c76e",
+      "type": "dql",
+      "filterSegments": [],
+      "drilldownPath": [],
+      "previousFilterSegments": [],
+      "height": 250,
+      "state": {
+        "input": {
+          "timeframe": {
+            "from": "now()-30d",
+            "to": "now()"
+          },
+          "value": "fetch dt.system.events\n| filter event.kind==\"AUDIT_EVENT\" and isNotNull(details.dt.settings.object_summary)\n| filterOut in(user.id, {\"UNKNOWN\",\"system\"})\n| summarize total=count(), tokenDriven=countIf(isNotNull(authentication.token)),\n    tokenActors=countDistinct(if(isNotNull(authentication.token), user.id)),\n    humanActors=countDistinct(if(isNull(authentication.token), user.id))\n| fieldsAdd CCS = round(toDouble(tokenDriven)/toDouble(total), decimals:3)"
+        },
+        "visualizationSettings": {
+          "table": {
+            "hideColumnsForLargeResults": true
+          },
+          "autoSelectVisualization": true,
+          "chartSettings": {}
+        },
+        "querySettings": {
+          "maxResultRecords": 1000,
+          "defaultScanLimitGbytes": 500,
+          "maxResultMegaBytes": 1,
+          "defaultSamplingRatio": 10,
+          "enableSampling": false
+        },
+        "visualization": "table"
+      },
+      "showTitle": true,
+      "title": "CCS \u2014 Config-as-Code Share"
+    },
+    {
+      "id": "958abf6a-8a9f-4f2a-b4f5-dfb524f295ea",
+      "type": "markdown",
+      "markdown": "## 3 \u00b7 WFR \u2014 Workflow Follow-Through Rate  \u2705\nTerminal executions only, deduped by execution id. Target \u2265 85%."
+    },
+    {
+      "id": "8e99a88f-3778-4dcb-817b-dd4760d2fba5",
+      "type": "dql",
+      "filterSegments": [],
+      "drilldownPath": [],
+      "previousFilterSegments": [],
+      "height": 250,
+      "state": {
+        "input": {
+          "timeframe": {
+            "from": "now()-30d",
+            "to": "now()"
+          },
+          "value": "fetch dt.system.events\n| filter event.kind==\"WORKFLOW_EVENT\" and event.type==\"WORKFLOW_EXECUTION\" and dt.automation_engine.state.is_final==true\n| dedup {dt.automation_engine.workflow_execution.id}, sort:{timestamp desc}\n| summarize triggered=count(), completed=countIf(dt.automation_engine.state==\"SUCCESS\")\n| fieldsAdd WFR = round(100.0*toDouble(completed)/toDouble(triggered), decimals:1)"
+        },
+        "visualizationSettings": {
+          "table": {
+            "hideColumnsForLargeResults": true
+          },
+          "autoSelectVisualization": true,
+          "chartSettings": {}
+        },
+        "querySettings": {
+          "maxResultRecords": 1000,
+          "defaultScanLimitGbytes": 500,
+          "maxResultMegaBytes": 1,
+          "defaultSamplingRatio": 10,
+          "enableSampling": false
+        },
+        "visualization": "table"
+      },
+      "showTitle": true,
+      "title": "WFR"
+    },
+    {
+      "id": "b3e887ee-a262-433a-b7de-61820aec6954",
+      "type": "markdown",
+      "markdown": "## 4 \u00b7 WOS \u2014 Workflow Ownership & Success  \u2705\nOwnership approximated by distinct runners per workflow; success = completed/triggered; composite = geometric mean."
+    },
+    {
+      "id": "6efc892d-51c2-4535-aced-bb3773ef28e2",
+      "type": "dql",
+      "filterSegments": [],
+      "drilldownPath": [],
+      "previousFilterSegments": [],
+      "height": 250,
+      "state": {
+        "input": {
+          "timeframe": {
+            "from": "now()-30d",
+            "to": "now()"
+          },
+          "value": "fetch dt.system.events\n| filter event.kind==\"WORKFLOW_EVENT\" and event.type==\"WORKFLOW_EXECUTION\" and dt.automation_engine.state.is_final==true\n| dedup {dt.automation_engine.workflow_execution.id}, sort:{timestamp desc}\n| summarize triggered=count(), completed=countIf(dt.automation_engine.state==\"SUCCESS\"),\n    workflows=countDistinct(dt.automation_engine.workflow.id),\n    actors=countDistinct(dt.automation_engine.workflow_execution.actor)\n| fieldsAdd WOS_Success = toDouble(completed)/toDouble(triggered)\n| fieldsAdd WOS_Ownership = if(toDouble(actors)/toDouble(workflows)>1.0, 1.0, else: toDouble(actors)/toDouble(workflows))\n| fieldsAdd WOS_Composite = round(sqrt(WOS_Ownership*WOS_Success), decimals:3)"
+        },
+        "visualizationSettings": {
+          "table": {
+            "hideColumnsForLargeResults": true
+          },
+          "autoSelectVisualization": true,
+          "chartSettings": {}
+        },
+        "querySettings": {
+          "maxResultRecords": 1000,
+          "defaultScanLimitGbytes": 500,
+          "maxResultMegaBytes": 1,
+          "defaultSamplingRatio": 10,
+          "enableSampling": false
+        },
+        "visualization": "table"
+      },
+      "showTitle": true,
+      "title": "WOS"
+    },
+    {
+      "id": "e56eeab3-d953-41f3-a2c3-3cb75f24dae9",
+      "type": "markdown",
+      "markdown": "## 5 \u00b7 PUI \u2014 Problem Usefulness Index  \u2705\n0.4\u00b7root-cause + 0.3\u00b7impact>1-entity + 0.3\u00b7actionable. Target \u2265 0.7. Near-zero impact-multi \u21d2 shallow topology or per-entity static thresholds."
+    },
+    {
+      "id": "58e86841-b85a-4712-836e-39d74638b34e",
+      "type": "dql",
+      "filterSegments": [],
+      "drilldownPath": [],
+      "previousFilterSegments": [],
+      "height": 250,
+      "state": {
+        "input": {
+          "timeframe": {
+            "from": "now()-30d",
+            "to": "now()"
+          },
+          "value": "fetch dt.davis.problems\n| dedup {display_id}, sort:{timestamp desc}\n| fieldsAdd rc = if(isNotNull(root_cause_entity_id) or isNotNull(root_cause.smartscape_entity.id), 1.0, else: 0.0)\n| fieldsAdd im = if(arraySize(affected_entity_ids) > 1 or arraySize(smartscape.affected_entity.ids) > 1, 1.0, else: 0.0)\n| fieldsAdd ac = if(dt.davis.mute.status==\"NOT_MUTED\" and dt.davis.is_duplicate==false and dt.davis.is_frequent_event==false, 1.0, else: 0.0)\n| summarize problems=count(), rootCauseRate=avg(rc), impactMultiRate=avg(im), actionableRate=avg(ac)\n| fieldsAdd PUI = round((0.4*rootCauseRate + 0.3*impactMultiRate + 0.3*actionableRate), decimals:3)"
+        },
+        "visualizationSettings": {
+          "table": {
+            "hideColumnsForLargeResults": true
+          },
+          "autoSelectVisualization": true,
+          "chartSettings": {}
+        },
+        "querySettings": {
+          "maxResultRecords": 1000,
+          "defaultScanLimitGbytes": 500,
+          "maxResultMegaBytes": 1,
+          "defaultSamplingRatio": 10,
+          "enableSampling": false
+        },
+        "visualization": "table"
+      },
+      "showTitle": true,
+      "title": "PUI"
+    },
+    {
+      "id": "2ec52b6f-2b20-4d51-b323-34746391c9eb",
+      "type": "markdown",
+      "markdown": "## 6 \u00b7 QEI \u2014 Query/Active Engagement Index  \u2705\n**Sustained active engagement**, not bucket diversity: of the humans who query at all, what share do so regularly (\u226510 distinct days). Answers 'is the data actually worked, or is it shelfware?' Also weigh sustained users against estate size (a handful of sustained users on a huge estate = shelfware even if the rate looks OK)."
+    },
+    {
+      "id": "fd436050-6383-4173-9cb0-67933b490ece",
+      "type": "dql",
+      "filterSegments": [],
+      "drilldownPath": [],
+      "previousFilterSegments": [],
+      "height": 250,
+      "state": {
+        "input": {
+          "timeframe": {
+            "from": "now()-30d",
+            "to": "now()"
+          },
+          "value": "fetch dt.system.query_executions\n| filter isNull(client.internal_service_context) and query_pool != \"AUTOMATION\"\n| summarize activeDays=countDistinct(toString(bin(timestamp,1d))), queries=count(), by:{user.id}\n| summarize activeUsers=count(), sustainedUsers=countIf(activeDays>=10),\n    oneOrTwoDayUsers=countIf(activeDays<=2), medianActiveDays=median(activeDays), totalQueries=sum(queries)\n| fieldsAdd QEI = round(toDouble(sustainedUsers)/toDouble(activeUsers), decimals:3)"
+        },
+        "visualizationSettings": {
+          "table": {
+            "hideColumnsForLargeResults": true
+          },
+          "autoSelectVisualization": true,
+          "chartSettings": {}
+        },
+        "querySettings": {
+          "maxResultRecords": 1000,
+          "defaultScanLimitGbytes": 500,
+          "maxResultMegaBytes": 1,
+          "defaultSamplingRatio": 10,
+          "enableSampling": false
+        },
+        "visualization": "table"
+      },
+      "showTitle": true,
+      "title": "QEI (active engagement)"
+    },
+    {
+      "id": "ce86d856-5670-429a-a52c-d16e49c9fcd9",
+      "type": "markdown",
+      "markdown": "## 6b \u00b7 EUB \u2014 Expected-Users Baseline  \ud83d\udfe1 *(persona-count estimate)*\nQEI says what share of active users is sustained; EUB asks the prior question \u2014 **is the active population the right size for this estate?** The estate's shape implies an expected persona population; compare it to the actual distinct query users (the QEI denominator). Default assumptions (override via `personaCounts` in `standards.<tenant>.json`): 0.3 developers per service \u00b7 1 SRE per host group \u00b7 1 owner per web/mobile app \u00b7 0.5 SRE per SLO \u00b7 2 cloud admins per cloud connector \u00b7 +2 security if AppSec is billed. **Bands:** actual/expected < 30% \u26a0\ufe0f platform closed to its consumers \u00b7 30\u201370% \ud83d\udca1 opportunity to open access \u00b7 70\u2013130% \u2705 platform open, personas on it \u00b7 > 130% baseline under-estimates this org (note as color, don't over-credit). An **estimate** \u2014 say so in the report. Context for QEI, **never an OES input**."
+    },
+    {
+      "id": "d2f4e68c-5b81-43a5-8ca7-3682d81d497d",
+      "type": "dql",
+      "filterSegments": [],
+      "drilldownPath": [],
+      "previousFilterSegments": [],
+      "height": 250,
+      "state": {
+        "input": {
+          "timeframe": {
+            "from": "now()-30d",
+            "to": "now()"
+          },
+          "value": "fetch dt.entity.service | summarize n=count() | fieldsAdd entityType=\"service\"\n| append [fetch dt.entity.host_group | summarize n=count() | fieldsAdd entityType=\"host_group\"]\n| append [fetch dt.entity.application | summarize n=count() | fieldsAdd entityType=\"web_application\"]\n| append [fetch dt.entity.mobile_application | summarize n=count() | fieldsAdd entityType=\"mobile_application\"]\n| fields entityType, n"
+        },
+        "visualizationSettings": {
+          "table": {
+            "hideColumnsForLargeResults": true
+          },
+          "autoSelectVisualization": true,
+          "chartSettings": {}
+        },
+        "querySettings": {
+          "maxResultRecords": 1000,
+          "defaultScanLimitGbytes": 500,
+          "maxResultMegaBytes": 1,
+          "defaultSamplingRatio": 10,
+          "enableSampling": false
+        },
+        "visualization": "table"
+      },
+      "showTitle": true,
+      "title": "EUB \u2014 estate shape vs actual users"
+    },
+    {
+      "id": "e34a4aaa-043d-4c2b-b6a8-a65832a9733a",
+      "type": "markdown",
+      "markdown": "## 7 \u00b7 Noise / Friction  \ud83d\udfe1\nDuplicate / frequent / muted / under-maintenance shares. NoisePenalty (OES) = duplicate + frequent rates. Reopen / ticket-per-problem / TSG need external systems (N/A)."
+    },
+    {
+      "id": "85190134-4579-4ddc-9182-df4671ab2d8d",
+      "type": "dql",
+      "filterSegments": [],
+      "drilldownPath": [],
+      "previousFilterSegments": [],
+      "height": 250,
+      "state": {
+        "input": {
+          "timeframe": {
+            "from": "now()-30d",
+            "to": "now()"
+          },
+          "value": "fetch dt.davis.problems\n| dedup {display_id}, sort:{timestamp desc}\n| summarize problems=count(),\n    duplicates=countIf(dt.davis.is_duplicate==true),\n    frequent=countIf(dt.davis.is_frequent_event==true),\n    muted=countIf(dt.davis.mute.status!=\"NOT_MUTED\"),\n    underMaint=countIf(maintenance.is_under_maintenance==true)\n| fieldsAdd duplicateRate=round(100.0*toDouble(duplicates)/toDouble(problems),decimals:2)\n| fieldsAdd frequentRate=round(100.0*toDouble(frequent)/toDouble(problems),decimals:2)\n| fieldsAdd maintenanceRate=round(100.0*toDouble(underMaint)/toDouble(problems),decimals:1)"
+        },
+        "visualizationSettings": {
+          "table": {
+            "hideColumnsForLargeResults": true
+          },
+          "autoSelectVisualization": true,
+          "chartSettings": {}
+        },
+        "querySettings": {
+          "maxResultRecords": 1000,
+          "defaultScanLimitGbytes": 500,
+          "maxResultMegaBytes": 1,
+          "defaultSamplingRatio": 10,
+          "enableSampling": false
+        },
+        "visualization": "table"
+      },
+      "showTitle": true,
+      "title": "Noise"
+    },
+    {
+      "id": "6e8d6652-428c-4df8-856a-e1e7bca5131e",
+      "type": "markdown",
+      "markdown": "## 7b \u00b7 Delivery \u2014 problem\u2192automation lane (config \u00d7 events)  \u2705\nEvents only see workflows that *ran*; the configured davis-problem workflows may never fire. Paste their ids below (from the **Workflows** app, or `dtctl get workflows` where `trigger.eventTrigger.triggerConfiguration.type == \"davis-problem\"`). **Zero runs against a large problem count = a dead alerting\u2192automation lane** \u2014 a finding neither config nor events shows alone. This also gives the **SQI workflow leg** (completed problem-triggered runs / total problems)."
+    },
+    {
+      "id": "cdc40830-9d20-499e-ba85-c955665148e8",
+      "type": "dql",
+      "filterSegments": [],
+      "drilldownPath": [],
+      "previousFilterSegments": [],
+      "height": 250,
+      "state": {
+        "input": {
+          "timeframe": {
+            "from": "now()-30d",
+            "to": "now()"
+          },
+          "value": "fetch dt.davis.problems | dedup {display_id} | summarize totalProblems = count()\n| append [\n    fetch dt.system.events\n    | filter event.kind==\"WORKFLOW_EVENT\" and event.type==\"WORKFLOW_EXECUTION\" and dt.automation_engine.state.is_final==true\n    | filter in(dt.automation_engine.workflow.id, {\"PASTE-DAVIS-PROBLEM-WORKFLOW-ID-1\",\"PASTE-ID-2\"})\n    | dedup {dt.automation_engine.workflow_execution.id}\n    | summarize triggered=count(), completed=countIf(dt.automation_engine.state==\"SUCCESS\")\n  ]\n| summarize totalProblems=max(totalProblems), triggered=max(triggered), completed=max(completed)\n| fieldsAdd ProblemAttachedWFR_pct = round(100.0*toDouble(completed)/toDouble(triggered), decimals:1)\n| fieldsAdd SQI_workflow_leg_pct = round(100.0*toDouble(completed)/toDouble(totalProblems), decimals:2)"
+        },
+        "visualizationSettings": {
+          "table": {
+            "hideColumnsForLargeResults": true
+          },
+          "autoSelectVisualization": true,
+          "chartSettings": {}
+        },
+        "querySettings": {
+          "maxResultRecords": 1000,
+          "defaultScanLimitGbytes": 500,
+          "maxResultMegaBytes": 1,
+          "defaultSamplingRatio": 10,
+          "enableSampling": false
+        },
+        "visualization": "table"
+      },
+      "showTitle": true,
+      "title": "Problem\u2192automation delivery (paste ids)"
+    },
+    {
+      "id": "a4823ea0-49c4-4667-b449-64f0462612e0",
+      "type": "markdown",
+      "markdown": "## 8 \u00b7 Foundation \u2014 SCI from the standards file  \ud83d\udd27\nEdit the required-key set to `requiredTagKeys.host` from `standards.<tenant>.json`. **A required key with no coverage returns no row** \u2014 count it as 0 when averaging (do not average present-only rows). **Gen3-first:** require source tags / host groups / segments, never classic management zones."
+    },
+    {
+      "id": "556cdf5e-b5b2-4449-846d-4127ef57d463",
+      "type": "dql",
+      "filterSegments": [],
+      "drilldownPath": [],
+      "previousFilterSegments": [],
+      "height": 250,
+      "state": {
+        "input": {
+          "timeframe": {
+            "from": "now()-30d",
+            "to": "now()"
+          },
+          "value": "fetch dt.entity.host\n| summarize totalHosts = count()\n| append [\n    fetch dt.entity.host\n    | expand tags | parse tags, \"LD:key ':' LD:val\"\n    | filter in(key, {\"Team\",\"dt.owner\",\"environment\"})   // <- requiredTagKeys.host\n    | summarize hostsWithKey = countDistinct(id), by:{key}\n  ]"
+        },
+        "visualizationSettings": {
+          "table": {
+            "hideColumnsForLargeResults": true
+          },
+          "autoSelectVisualization": true,
+          "chartSettings": {}
+        },
+        "querySettings": {
+          "maxResultRecords": 1000,
+          "defaultScanLimitGbytes": 500,
+          "maxResultMegaBytes": 1,
+          "defaultSamplingRatio": 10,
+          "enableSampling": false
+        },
+        "visualization": "table"
+      },
+      "showTitle": true,
+      "title": "SCI coverage (from standards)"
+    },
+    {
+      "id": "98a02fd6-d500-458e-a62c-a031829043c4",
+      "type": "markdown",
+      "markdown": "## 9 \u00b7 Trends \u2014 direction, not just level\nWeekly trajectories of the headline KPIs. A stable-but-low line = chronic (fix the design); a falling line = regression (find what changed). **Always read the ratio next to its per-week count** \u2014 ratios on small weekly samples (e.g. config participants) are noisy."
+    },
+    {
+      "id": "1170cd2a-6a8a-49e5-88c1-65d124c7316f",
+      "type": "dql",
+      "filterSegments": [],
+      "drilldownPath": [],
+      "previousFilterSegments": [],
+      "height": 250,
+      "state": {
+        "input": {
+          "timeframe": {
+            "from": "now()-30d",
+            "to": "now()"
+          },
+          "value": "fetch dt.system.events\n| filter event.kind==\"WORKFLOW_EVENT\" and event.type==\"WORKFLOW_EXECUTION\" and dt.automation_engine.state.is_final==true\n| dedup {dt.automation_engine.workflow_execution.id}, sort:{timestamp desc}\n| fieldsAdd ok = if(dt.automation_engine.state==\"SUCCESS\",1.0,else:0.0)\n| summarize triggered=count(), completed=sum(ok), by:{week=bin(timestamp,7d)}\n| fieldsAdd WFR_pct = round(100.0*completed/toDouble(triggered),decimals:1)\n| sort week asc"
+        },
+        "visualizationSettings": {
+          "table": {
+            "hideColumnsForLargeResults": true
+          },
+          "autoSelectVisualization": true,
+          "chartSettings": {}
+        },
+        "querySettings": {
+          "maxResultRecords": 1000,
+          "defaultScanLimitGbytes": 500,
+          "maxResultMegaBytes": 1,
+          "defaultSamplingRatio": 10,
+          "enableSampling": false
+        },
+        "visualization": "table"
+      },
+      "showTitle": true,
+      "title": "WFR trend (weekly)"
+    },
+    {
+      "id": "f0590f6b-d1bb-453a-9284-d9f3d8225c5c",
+      "type": "dql",
+      "filterSegments": [],
+      "drilldownPath": [],
+      "previousFilterSegments": [],
+      "height": 250,
+      "state": {
+        "input": {
+          "timeframe": {
+            "from": "now()-30d",
+            "to": "now()"
+          },
+          "value": "fetch dt.davis.problems\n| dedup {display_id}, sort:{timestamp desc}\n| fieldsAdd rc=if(isNotNull(root_cause_entity_id) or isNotNull(root_cause.smartscape_entity.id),1.0,else:0.0), im=if(arraySize(affected_entity_ids)>1 or arraySize(smartscape.affected_entity.ids)>1,1.0,else:0.0), ac=if(dt.davis.mute.status==\"NOT_MUTED\" and dt.davis.is_duplicate==false and dt.davis.is_frequent_event==false,1.0,else:0.0)\n| summarize PUI=round(0.4*avg(rc)+0.3*avg(im)+0.3*avg(ac),decimals:3), problems=count(), by:{week=bin(timestamp,7d)}\n| sort week asc"
+        },
+        "visualizationSettings": {
+          "table": {
+            "hideColumnsForLargeResults": true
+          },
+          "autoSelectVisualization": true,
+          "chartSettings": {}
+        },
+        "querySettings": {
+          "maxResultRecords": 1000,
+          "defaultScanLimitGbytes": 500,
+          "maxResultMegaBytes": 1,
+          "defaultSamplingRatio": 10,
+          "enableSampling": false
+        },
+        "visualization": "table"
+      },
+      "showTitle": true,
+      "title": "PUI trend (weekly)"
+    },
+    {
+      "id": "30193322-ac2c-4a48-a5d0-aeb863989c40",
+      "type": "dql",
+      "filterSegments": [],
+      "drilldownPath": [],
+      "previousFilterSegments": [],
+      "height": 250,
+      "state": {
+        "input": {
+          "timeframe": {
+            "from": "now()-30d",
+            "to": "now()"
+          },
+          "value": "fetch dt.system.events\n| filter event.kind==\"AUDIT_EVENT\" and isNull(authentication.token) and isNotNull(details.dt.settings.object_summary)\n| filterOut in(user.id, {\"UNKNOWN\",\"system\"})\n| summarize changes=count(), by:{user.id, week=bin(timestamp,7d)}\n| summarize COC=round(sum(changes*changes)/(sum(changes)*sum(changes)),decimals:3), participants=countDistinct(user.id), by:{week}\n| sort week asc"
+        },
+        "visualizationSettings": {
+          "table": {
+            "hideColumnsForLargeResults": true
+          },
+          "autoSelectVisualization": true,
+          "chartSettings": {}
+        },
+        "querySettings": {
+          "maxResultRecords": 1000,
+          "defaultScanLimitGbytes": 500,
+          "maxResultMegaBytes": 1,
+          "defaultSamplingRatio": 10,
+          "enableSampling": false
+        },
+        "visualization": "table"
+      },
+      "showTitle": true,
+      "title": "COC trend (weekly + participant count)"
+    },
+    {
+      "id": "c8d478aa-f57a-4c1e-8371-4b11ad37ff19",
+      "type": "markdown",
+      "markdown": "## 10 \u00b7 OES \u2014 Overall Effective Score  \u2705\nOne-query rollup of the computable pillars. Foundation is **excluded** (definition-gated) and the denominator reweighted; NoisePenalty applied multiplicatively. **Weights use the source code block** (Signals 0.35 \u00b7 Automation 0.35 \u00b7 Foundation 0.20 \u00b7 Engagement 0.10); edit inline to switch to the prose weights (0.35 / 0.20 / 0.10 / 0.35). Grade: A\u226585 B\u226570 C\u226550 D<50.\n\n**Automation composition (upgraded 2026-07-14):** `Automation = mean(WFR, WOS, CCS)` \u2014 CCS folds the config-as-code half of automation into the pillar; a tenant whose workflows succeed but whose every config change is click-ops is not automation-mature. A deliberate change from the source model \u2014 flag it in the method note alongside the weight-profile choice (`targets.includeCCS`, default true; drop CCS from the mean to revert)."
+    },
+    {
+      "id": "887a27f7-5923-40e0-a0b8-c7ac3c26d4dd",
+      "type": "dql",
+      "filterSegments": [],
+      "drilldownPath": [],
+      "previousFilterSegments": [],
+      "height": 320,
+      "state": {
+        "input": {
+          "timeframe": {
+            "from": "now()-30d",
+            "to": "now()"
+          },
+          "value": "fetch dt.system.query_executions\n| filter isNull(client.internal_service_context)\n| summarize eligibleUsers = countDistinct(user.id)\n| append [\n    fetch dt.system.events\n    | filter event.kind == \"AUDIT_EVENT\" and isNull(authentication.token)\n    | filter isNotNull(details.dt.settings.object_summary)\n    | filterOut in(user.id, {\"UNKNOWN\", \"system\"})\n    | summarize changes = count(), by:{user.id}\n    | summarize configurators = countDistinct(user.id),\n                hhi = sum(changes*changes) / (sum(changes) * sum(changes))\n  ]\n| append [\n    fetch dt.system.events\n    | filter event.kind == \"AUDIT_EVENT\" and isNotNull(details.dt.settings.object_summary)\n    | filterOut in(user.id, {\"UNKNOWN\", \"system\"})\n    | summarize ccsTotal = count(), ccsTokenDriven = countIf(isNotNull(authentication.token))\n  ]\n| append [\n    fetch dt.system.events\n    | filter event.kind==\"WORKFLOW_EVENT\" and event.type==\"WORKFLOW_EXECUTION\" and dt.automation_engine.state.is_final==true\n    | dedup {dt.automation_engine.workflow_execution.id}, sort:{timestamp desc}\n    | summarize wfTriggered=count(), wfCompleted=countIf(dt.automation_engine.state==\"SUCCESS\"),\n        wfWorkflows=countDistinct(dt.automation_engine.workflow.id),\n        wfActors=countDistinct(dt.automation_engine.workflow_execution.actor)\n  ]\n| append [\n    fetch dt.davis.problems\n    | dedup {display_id}, sort:{timestamp desc}\n    | fieldsAdd rc = if(isNotNull(root_cause_entity_id) or isNotNull(root_cause.smartscape_entity.id),1.0,else:0.0)\n    | fieldsAdd im = if(arraySize(affected_entity_ids)>1 or arraySize(smartscape.affected_entity.ids)>1,1.0,else:0.0)\n    | fieldsAdd ac = if(dt.davis.mute.status==\"NOT_MUTED\" and dt.davis.is_duplicate==false and dt.davis.is_frequent_event==false,1.0,else:0.0)\n    | summarize problems=count(), rootCauseRate=avg(rc), impactMultiRate=avg(im), actionableRate=avg(ac),\n        dupRate=avg(if(dt.davis.is_duplicate==true,1.0,else:0.0)),\n        freqRate=avg(if(dt.davis.is_frequent_event==true,1.0,else:0.0))\n  ]\n| append [\n    fetch dt.system.query_executions\n    | filter isNull(client.internal_service_context) and query_pool != \"AUTOMATION\"\n    | summarize activeDays=countDistinct(toString(bin(timestamp,1d))), by:{user.id}\n    | summarize activeUsers=count(), sustainedUsers=countIf(activeDays>=10)\n  ]\n| summarize eligibleUsers=max(eligibleUsers), configurators=max(configurators), hhi=max(hhi),\n    ccsTotal=max(ccsTotal), ccsTokenDriven=max(ccsTokenDriven),\n    wfTriggered=max(wfTriggered), wfCompleted=max(wfCompleted), wfWorkflows=max(wfWorkflows), wfActors=max(wfActors),\n    problems=max(problems), rootCauseRate=max(rootCauseRate), impactMultiRate=max(impactMultiRate), actionableRate=max(actionableRate),\n    dupRate=max(dupRate), freqRate=max(freqRate), activeUsers=max(activeUsers), sustainedUsers=max(sustainedUsers)\n| fieldsAdd SSU = toDouble(configurators)/toDouble(eligibleUsers)\n| fieldsAdd OwnershipIndex = 1.0 - hhi\n| fieldsAdd CCS = toDouble(ccsTokenDriven)/toDouble(ccsTotal)\n| fieldsAdd WFR = toDouble(wfCompleted)/toDouble(wfTriggered)\n| fieldsAdd WOS = sqrt( (if(toDouble(wfActors)/toDouble(wfWorkflows)>1.0,1.0,else:toDouble(wfActors)/toDouble(wfWorkflows))) * (toDouble(wfCompleted)/toDouble(wfTriggered)) )\n| fieldsAdd PUI = 0.4*rootCauseRate + 0.3*impactMultiRate + 0.3*actionableRate\n| fieldsAdd QEI = toDouble(sustainedUsers)/toDouble(activeUsers)\n| fieldsAdd NoisePenalty = if(dupRate+freqRate>0.5,0.5,else:dupRate+freqRate)\n| fieldsAdd Signals_idx = PUI\n| fieldsAdd Automation_idx = (WFR + WOS + CCS)/3.0\n| fieldsAdd Engagement_idx = QEI\n| fieldsAdd OES = round( (0.35*Signals_idx + 0.35*Automation_idx + 0.10*Engagement_idx) / 0.80 * (1.0-NoisePenalty) * 100 )\n| fieldsAdd Grade = if(OES>=85,\"A\",else:if(OES>=70,\"B\",else:if(OES>=50,\"C\",else:\"D\")))\n| fields SSU, OwnershipIndex, CCS, WFR, WOS, PUI, QEI, NoisePenalty, Signals_idx, Automation_idx, Engagement_idx, OES, Grade"
+        },
+        "visualizationSettings": {
+          "table": {
+            "hideColumnsForLargeResults": true
+          },
+          "autoSelectVisualization": true,
+          "chartSettings": {}
+        },
+        "querySettings": {
+          "maxResultRecords": 1000,
+          "defaultScanLimitGbytes": 500,
+          "maxResultMegaBytes": 1,
+          "defaultSamplingRatio": 10,
+          "enableSampling": false
+        },
+        "visualization": "table"
+      },
+      "showTitle": true,
+      "title": "OES rollup"
+    }
+  ]
+}

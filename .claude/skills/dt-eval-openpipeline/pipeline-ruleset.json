@@ -1,0 +1,399 @@
+{
+  "meta": {
+    "name": "pipeline-ruleset",
+    "version": "0.1.0-draft",
+    "spec": "docs/specs/dt-eval-openpipeline-skill-spec.md (O7/O7a)",
+    "source": "hand-authored, no source workbook",
+    "source_note": "Unlike dt-eval-prob's noise-ruleset.json (transcribed from a maintained 'Alerting Thresholds' workbook by build_ruleset.py), there is no source-of-truth spreadsheet for OpenPipeline. This file is authored directly, so there is nothing to re-transcribe and no transcriber to run — do not go looking for one. Every rule below is lifted from dt-eval-tenant's already-live-validated probe documentation rather than re-derived; the `derived_from` field names the file and probe so a maintainer can re-read the original gotcha instead of trusting this summary.",
+    "authority": "scoring.py is the executable authority for the arithmetic. This file supplies the definitions, thresholds and dispositions it applies. Where the two disagree, scoring.py is right and this file is the bug.",
+    "scored_field_contract": "Every rule carries `scored`. true = the rule feeds an O7 pillar and moves the headline number. false = the rule produces findings, prioritization or narrative ONLY and must never reach the arithmetic. The seam is structural rather than prose because that is exactly where this spec's v1.0 draft went wrong: it scored adjustable internal limits and possibly-intentional configuration, and it paid a null tenant for having built nothing. A rule with `scored: false` and `scored_after_confirmation: true` enters the arithmetic only once an analyst has confirmed the specific finding is a defect rather than a deliberate design choice.",
+    "default_rule": "A check whose ✅ state is the platform default earns nothing; only its absence may move a score. Scoring the presence of a default is scoring the absence of work — see rule catch-all-matcher for the instance that made this explicit."
+  },
+  "rules": [
+    {
+      "id": "ownership-partition",
+      "scored": true,
+      "mechanism": "filter",
+      "applies_to": [
+        "gate.n_authored",
+        "structural_hygiene",
+        "findings.orphans",
+        "findings.consolidation"
+      ],
+      "derived_from": {
+        "file": "probes-deepdives.md",
+        "probes": [
+          "D2",
+          "D6 step 0"
+        ],
+        "validated": "2026-08-07"
+      },
+      "summary": "Partition every pipeline by `externalId` ownership BEFORE any orphan, duplicate or consolidation logic runs.",
+      "partition": {
+        "platform_default": {
+          "match": "externalId starts with 'com.dynatrace.' (ANY Dynatrace-supplied pipeline, not only 'com.dynatrace.extension.')",
+          "disposition": "Never a customer consolidation target, whatever its processing shape or route status. Excluded from n_authored and from every hygiene defect. Report the count separately as 'N extension-default pipelines, not assessed for consolidation' and stop there for that subset."
+        },
+        "customer_authored": {
+          "match": "externalId starts with 'monaco:' (config-as-code) OR externalId is null (created via the OpenPipeline app UI). Note what this excludes: a customer cannot author a 'com.dynatrace.*' externalId — that namespace is set by Dynatrace provisioning.",
+          "disposition": "In scope. This subset alone is n_authored — the gate's denominator and StructuralHygiene's."
+        }
+      },
+      "why_load_bearing": "This is the single most consequential rule in the file: a wrong partition moves both the adoption gate and the hygiene pillar. It exists because skipping it turned platform defaults into a false consolidation finding on a live run — 9 of 10 metrics pipelines read as 'orphans' and all 10 carried extension externalIds, including two with identical 2-processor structures that would otherwise have matched the exact-duplicate test. The prefix must therefore be the whole 'com.dynatrace.' namespace: matching only the '.extension.' sub-namespace leaves every other Dynatrace-provisioned pipeline landing in the customer's column.",
+      "widened": "WIDENED 2026-08-10 from 'com.dynatrace.extension.*' to 'com.dynatrace.*', found by the second live tenant. A pipeline carrying externalId 'com.dynatrace.filesystem_filesystem-metrics' is plainly Dynatrace-supplied but does not match the '.extension.' prefix, so the narrow rule classified it as customer-authored AND unrouted — a false orphan, which is precisely the finding class this step exists to prevent. One object in two estates, and it would have been reported to the customer as their config debt."
+    },
+    {
+      "id": "catch-all-matcher",
+      "scored": true,
+      "pillar": "routing_integrity",
+      "mechanism": "asymmetric_scaled_cap",
+      "present_credit": 0,
+      "derived_from": {
+        "file": "probes-config.md",
+        "probes": [
+          "A21"
+        ],
+        "also": "field-notes.md 'Routing is ordered and first-match-wins'"
+      },
+      "summary": "A trailing enabled routing entry whose matcher is literally `true` is a catch-all: every record not matched earlier is routed into a pipeline, so nothing falls through to the classic/default flow.",
+      "detection": "jq '[.[0].value.routingEntries[] | select(.enabled and (.matcher|tostring|test(\"^\\\\s*true\\\\s*$\")))] | length'",
+      "mechanism_note": "A CAP, never a weight. Presence earns nothing — a catch-all is present by default on any Gen3 tenant, and weighting it once handed 60% of the pillar to a platform default, letting a tenant whose every routing entry was dangling still score 60.0. RECALIBRATED 2026-08-10: the absence penalty was a flat cap at 40, set believing absence meant silent data loss. It does not — unmatched records fall through to the default pipeline and bucket, receiving default processing with no custom security context or retention, but they are NOT dropped. First live measurement put the fall-through at 0.027%, and the flat cap moved that tenant a full grade band for it. The penalty now scales with the measured share, with a fixed component for the latent risk that the destination is unchosen. An UNMEASURED share keeps the old conservative cap, so measuring is how a tenant earns the lighter penalty.",
+      "reporting": "0 enabled entries means everything really does fall through to the default pipeline — categorically a different finding from a catch-all being present. State which of the two worlds the tenant is in.",
+      "do_not": "Do NOT infer routing maturity from B1's `in_default` share — that measures the bucket, not the pipeline.",
+      "absent_cap_unmeasured": 40.0,
+      "unchosen_penalty": 5.0,
+      "min_cap": 40.0,
+      "scaling": "cap = max(min_cap, 100 - unchosen_penalty - measured_fall_through_pct). The measured default-bucket share IS the harm: the proportion of records not receiving the governance the routing table was built to apply.",
+      "measurement": "fetch logs, from:-24h | summarize records = count(), by: {dt.system.bucket} — the default bucket's share of the total"
+    },
+    {
+      "id": "dangling-routing-entry",
+      "scored": true,
+      "pillar": "routing_integrity",
+      "mechanism": "share",
+      "formula": "100 * (1 - dangling / total_routing_entries)",
+      "derived_from": {
+        "file": "probes-config.md",
+        "probes": [
+          "A21",
+          "A22"
+        ]
+      },
+      "summary": "An enabled routing entry whose target `pipelineId` resolves to no existing pipeline object. Records matching it do not land where the routing table claims.",
+      "precondition": "Only assessable once rule a21-a22-overlap-sanity has passed. A pipeline that is merely unreadable is NOT dangling."
+    },
+    {
+      "id": "shadowed-routing-entry",
+      "scored": true,
+      "pillar": "routing_integrity",
+      "mechanism": "share",
+      "formula": "100 * (1 - shadowed / total_routing_entries)",
+      "derived_from": {
+        "file": "probes-config.md",
+        "probes": [
+          "A21"
+        ]
+      },
+      "summary": "Routing is ordered and first-match-wins. An enabled entry is shadowed when an earlier enabled entry's matcher subsumes it, so it can never match a record. Read the LAST enabled entry before concluding anything.",
+      "note": "A catch-all shadows every entry after it by definition. Entries following a catch-all are shadowed by construction and should be reported as such, not as a separate defect class."
+    },
+    {
+      "id": "exact-duplicate-family",
+      "scored": true,
+      "pillar": "structural_hygiene",
+      "mechanism": "defect_membership",
+      "derived_from": {
+        "file": "probes-deepdives.md",
+        "probes": [
+          "D6 step 1"
+        ],
+        "validated": "2026-08-07"
+      },
+      "summary": "Two or more customer-authored pipeline objects with byte-identical `processing` / `metricExtraction` / `dataExtraction` / `securityContext` / `storage` / `costAllocation` stage arrays (normalize away objectId/title/timestamps first).",
+      "risk": "Zero-risk to merge: no processing content changes for any source. Pure administrative sprawl — typically one pipeline created per source during onboarding instead of routing every source at one existing pipeline.",
+      "scope_rule": "Never merge across data-type scopes (logs / bizevents / events.security / metrics / ...). A pipeline in one scope cannot receive another's records.",
+      "precondition": "ownership-partition must run first.",
+      "counting": "Every member of the family counts toward affected_pipelines. Count each pipeline ONCE even if it is also an orphan or on a duplicate collection path."
+    },
+    {
+      "id": "unrouted-orphan",
+      "scored": true,
+      "pillar": "structural_hygiene",
+      "mechanism": "defect_membership",
+      "derived_from": {
+        "file": "probes-deepdives.md",
+        "probes": [
+          "D2",
+          "D6 step 4"
+        ],
+        "validated": "2026-08-07"
+      },
+      "summary": "A customer-authored pipeline missing from BOTH consumer surfaces: A21's enabled `routingEntries[].pipelineId` AND A22's pipeline-group membership.",
+      "double_negative_rule": "Both surfaces, not either. A pipeline referenced only via a group and never a direct route is NOT orphaned. Pipeline groups may legitimately hold 0 objects, so an empty group surface proves nothing on its own.",
+      "precondition": "ownership-partition must run first — extension-owned pipelines are not routing-table-dependent by design and are never orphans.",
+      "risk": "True double-negative orphans in the customer-authored subset are the cheapest, zero-ambiguity win: delete outright, no family analysis needed.",
+      "scored_in_one_pillar_only": "Orphans belong to StructuralHygiene and NOT to RoutingIntegrity. The v1.0 spec draft scored them in both, double-counting one measurement across 0.70 of the composite."
+    },
+    {
+      "id": "duplicate-collection-path",
+      "scored": true,
+      "pillar": "structural_hygiene",
+      "mechanism": "defect_membership",
+      "derived_from": {
+        "file": "probes-grail.md",
+        "probes": [
+          "B50"
+        ],
+        "validated": "2026-08-07"
+      },
+      "summary": "A third-party collector metric that is accepted at ingest and duplicates a signal OneAgent or an extension already collects natively FOR THE SAME ENTITY — money spent ingesting the same thing twice, plus two numbers measuring one signal that can silently drift apart.",
+      "join_rule": "Must join on ENTITY, not namespace overlap alone. Namespace similarity is a candidate, not a finding — proving actual double-collection requires the same entity carrying both.",
+      "distinguish_from": "B40 flags REJECTED custom keys — data lost at ingest. B50 flags ACCEPTED keys that duplicate a native signal. Different defect; do not conflate the findings.",
+      "zero_result_discipline": "Zero candidate keys (no collector runs at all) is a different finding from zero overlap (a collector runs but nothing it publishes duplicates a native signal). Do not collapse the two into one '✅ no redundant metrics' sentence — they have different remediation implications.",
+      "mapping_provenance": "The collector→native table below is a maintained lookup, not a query re-derived per run. Its query syntax and timeframe discipline are live-verified; its ENTRIES remain unconfirmed against a tenant that actually has custom-collector metrics. Treat a match as a candidate to verify, not a proven duplicate.",
+      "mapping": [
+        {
+          "third_party": "cpu.usage_* / cpu.usage_idle",
+          "native": "dt.host.cpu.usage",
+          "surface": "OneAgent host monitoring"
+        },
+        {
+          "third_party": "mem.used_percent / mem.available",
+          "native": "dt.host.memory.usage / .available",
+          "surface": "OneAgent host monitoring"
+        },
+        {
+          "third_party": "disk.used_percent",
+          "native": "dt.host.disk.used.percent (per device/mountpoint)",
+          "surface": "OneAgent host monitoring"
+        },
+        {
+          "third_party": "diskio.*",
+          "native": "dt.host.disk.{read,write}.*",
+          "surface": "OneAgent host monitoring"
+        },
+        {
+          "third_party": "net.bytes_* / net.packets_*",
+          "native": "dt.host.net.nic.*",
+          "surface": "OneAgent host monitoring"
+        },
+        {
+          "third_party": "system.load1/5/15",
+          "native": "dt.host.cpu.load",
+          "surface": "OneAgent host monitoring"
+        },
+        {
+          "third_party": "processes.*",
+          "native": "dt.process.*",
+          "surface": "OneAgent process monitoring"
+        },
+        {
+          "third_party": "docker.* / kubernetes.*",
+          "native": "dt.container.* / dt.kubernetes.container.*",
+          "surface": "OneAgent/K8s monitoring"
+        },
+        {
+          "third_party": "win_cpu.* / win_mem.*",
+          "native": "dt.host.cpu.usage / .memory.usage (Windows)",
+          "surface": "OneAgent host monitoring"
+        }
+      ],
+      "extend": "The prefix list (custom:, telegraf., statsd.) is the common case, not an exhaustive one — extend it to whatever collector namespaces the tenant's actual custom-ingest publishers use."
+    },
+    {
+      "id": "signal-type-family",
+      "scored": true,
+      "pillar": "native_adoption_breadth",
+      "mechanism": "share",
+      "derived_from": {
+        "file": "probes-config.md",
+        "probes": [
+          "A23",
+          "A54"
+        ]
+      },
+      "summary": "Share of the OpenPipeline signal-type family carrying a live pipeline. The breadth read — 'OpenPipeline beyond logs'.",
+      "family": [
+        "logs",
+        "bizevents",
+        "events",
+        "events.security",
+        "davis.problems",
+        "davis.events",
+        "events.sdlc",
+        "metrics"
+      ],
+      "precedence": "Gen3's E4 domain reads the same residue-vs-native pair and is the authority for the ADOPTION VERDICT; this pillar defers to it and carries the breadth/masking depth E4 does not. If the two disagree on whether OpenPipeline is adopted, that is a defect in one of them, not a finding about the tenant."
+    },
+    {
+      "id": "classic-translation-residue",
+      "scored": true,
+      "pillar": "native_adoption_breadth",
+      "mechanism": "status",
+      "status_map": {
+        "empty": "healthy",
+        "non_empty": "opportunity",
+        "unreadable": "unknown"
+      },
+      "derived_from": {
+        "file": "probes-config.md",
+        "probes": [
+          "A29"
+        ]
+      },
+      "summary": "`dtctl get classic-pipelines-translation logs|bizevents` — read-only. Substantive output means migration from classic processing is still pending.",
+      "never_attention": "Pending residue is 💡, not ⚠️: it means migration is incomplete, which is an opportunity. There is also no trustworthy denominator to scale the count against, so it is a status and not a share.",
+      "degradation": "A29 can 500 or permission-error on some tenants. Graceful-degrade that check to ⚪ — never fail the pillar, and never read the error as 'no residue'."
+    },
+    {
+      "id": "masking-layer-coverage",
+      "scored": true,
+      "pillar": "native_adoption_breadth",
+      "mechanism": "share",
+      "derived_from": {
+        "file": "probes-config.md",
+        "probes": [
+          "A38"
+        ]
+      },
+      "summary": "Masking posture across capture / ingest / display. OpenPipeline mask processors inside A22's `processing` stages are one of three enforcement layers — score the OpenPipeline layer here and name the other two in the narrative.",
+      "degradation": "⚪ when not assessable; excluded from the pillar's denominator, never scored 0."
+    },
+    {
+      "id": "pipeline-capacity-soft-limits",
+      "scored": false,
+      "reason_not_scored": "The default/soft/hard tier structure is internal product-limit metadata: adjustable by Dynatrace, expected to drift, and NOT stated on the public limits page. A pillar whose inputs move when Dynatrace adjusts a soft limit is not reproducible run-over-run, and a customer-facing number that cannot be defended from docs.dynatrace.com collides with the repo's citation rule. Measure it, report it, prioritize with it — do not score it.",
+      "use": [
+        "findings",
+        "remediation_ordering"
+      ],
+      "citable_public_figures": {
+        "processors_per_pipeline": 1000,
+        "pipelines_per_configuration_scope": 100,
+        "source": "https://docs.dynatrace.com/docs/platform/openpipeline/reference/limits",
+        "note": "These are the figures a customer-facing report may quote and attribute. Quote these; never the internal tiers."
+      },
+      "internal_tiers": {
+        "processors_per_pipeline": {
+          "default": null,
+          "soft": null,
+          "hard": null
+        },
+        "pipelines_per_configuration_scope": {
+          "default": null,
+          "soft": null,
+          "hard": null
+        },
+        "pending_confirmation": true,
+        "source_hint": "ProductLimits.csv-style export held internally",
+        "instruction": "Left null deliberately. Confirm current values with Dynatrace product/account engineering before recording them — a point-in-time export is not authoritative, and a stale hardcoded tier is worse than an absent one. Internal-audience deliverables only.",
+        "reconfirm_after": "2026-11-10"
+      },
+      "remediation_stance": "Both limits are soft and Dynatrace-adjustable, not hard technical ceilings — and engineering is reluctant to raise either when a structural fix accomplishes the same goal: split an overloaded pipeline along an existing content seam, or consolidate a duplicate family per D6. Lead with the structural fix, not the limit-increase request."
+    },
+    {
+      "id": "governance-drift",
+      "scored": false,
+      "scored_after_confirmation": true,
+      "severity_cap": "opportunity",
+      "never": "attention",
+      "derived_from": {
+        "file": "probes-deepdives.md",
+        "probes": [
+          "D6 step 3"
+        ],
+        "validated": "2026-08-07"
+      },
+      "summary": "Within a candidate merge family: identical processing but DIFFERENT `securityContext`, `storage` or `costAllocation` across members.",
+      "reason_not_scored": "Drift may be deliberate. Identical processing + different governance often means the duplicates are separated on purpose for ABAC scoping, bucket assignment or cost attribution — merging would silently reassign one source's security context or cost center to another's, a governance regression dressed as a simplification. Scoring it blind penalizes possibly-correct configuration: the `threshold 0` + ABOVE lesson from dt-eval-prob, where 59 + 8 correctly-written detectors would have been marked defective.",
+      "required_step": "NEVER recommend merging a family with governance drift without first asking whether the drift is intentional design or accidental copy-paste. The same family shape can be either, and only the owner knows which. This question belongs in the engagement, not only in the report template.",
+      "after_confirmation": "Once an analyst records the drift as accidental, its members enter affected_pipelines under exact-duplicate-family (counted once).",
+      "highest_risk_read": true
+    },
+    {
+      "id": "near-duplicate-family",
+      "scored": false,
+      "scored_after_confirmation": true,
+      "severity_cap": "opportunity",
+      "derived_from": {
+        "file": "probes-deepdives.md",
+        "probes": [
+          "D6 step 2"
+        ],
+        "validated": "2026-08-07"
+      },
+      "summary": "Same processor TYPES and ORDER, differing only in literal parameters (a masking regex tuned per source, a metric-extraction field name, a DPL parse pattern). Normalize by stripping literal values, then group on the resulting shape.",
+      "reason_not_scored": "A near-duplicate family may legitimately stay separate. D6 is explicit that this is NOT an automatic generalization — unlike a detector's `by:{}` dimension, a pipeline processor has no general 'handle N field-name variants in one step' primitive. A family whose deltas are genuinely source-specific is correct configuration, and scoring its membership as a defect penalizes it. Same reasoning as governance-drift.",
+      "after_confirmation": "Enters affected_pipelines only where an analyst confirms the deltas are equivalent-shaped (same field semantics, different name/regex) and the family is therefore genuinely generalizable. Otherwise tag it 'same processing, source-specific parameters — not a mergeable clone' and report without scoring.",
+      "worked_example": "A live-validated generalizable case: two vendor log pipelines, each exactly 4 dql-type processors in the same order, normalizing to an identical target field set, differing only in the vendor-specific parse pattern and value mapping. One shared normalize stage fed by a per-vendor parse stage selected on log.source collapses both."
+    },
+    {
+      "id": "canonical-survivor-selection",
+      "scored": false,
+      "derived_from": {
+        "file": "probes-deepdives.md",
+        "probes": [
+          "D6 step 5"
+        ]
+      },
+      "summary": "Before naming which family member survives a merge, pull each member's observed record share and keep the HIGHEST-VOLUME member as canonical.",
+      "why": "Repointing low-volume routing entries onto an established, already-proven pipeline is lower-risk than repointing high-volume traffic onto a rarely-used one.",
+      "volume_source": "B45 per-source volume where resolvable, else B1's routing/default-bucket split as a proxy.",
+      "use": [
+        "remediation_ordering"
+      ]
+    },
+    {
+      "id": "a21-a22-overlap-sanity",
+      "scored": false,
+      "verdict_when_zero": "unknown",
+      "derived_from": {
+        "file": "probes-config.md",
+        "probes": [
+          "A22"
+        ],
+        "validated": "2026-07-27"
+      },
+      "summary": "The pipelines schema does NOT necessarily return the pipelines the routing table targets. Live-verified: the schema returned 5 tech pipelines while the routing table fed 9 different pipeline IDs — an overlap of ZERO. Always join A21's pipelineId values against the objects read and assert the overlap is non-empty before drawing any conclusion.",
+      "reason_not_scored": "The usual cause is object-level read-share denial — a permissions artifact. Scoring it as a routing-integrity defect reports 'we could not read this' to the customer as 'your configuration is broken.' It is ⚪: excluded from the denominator, never zero.",
+      "diagnosis_order": [
+        "1. Object-level read-share — `dtctl describe settings <pipelineId>`. A 403 'No read share for object' means the pipeline exists but is not shared with the review identity. Record the stages as ⚪ not assessable, naming the share needed — never as 'thin' or absent.",
+        "2. Pipeline groups — read the pipeline-groups schema. It may legitimately hold 0 objects, so absence there proves nothing.",
+        "3. Scope / pagination."
+      ],
+      "field_note": "On the reference tenant the cause was (1): the schema returned only the world-readable extension-owned pipelines, while every user-created pipeline carrying the routing was denied. This is the single easiest way to produce a confidently wrong OpenPipeline finding."
+    },
+    {
+      "id": "throughput-context-only",
+      "scored": false,
+      "derived_from": {
+        "file": "probes-grail.md",
+        "probes": [
+          "B45"
+        ]
+      },
+      "summary": "`dt.sfm.openpipeline.routing.records` throughput — volume and liveness context only.",
+      "reason_not_scored": "`pct_through_pipelines` reads ~100% on any Gen3 tenant regardless of migration depth, so it cannot discriminate. Never an adoption score.",
+      "dimension_trap": "No `pipeline` dimension exists. `dt.openpipeline.pipeline`, `.pipeline.id`, `.route`, `.configuration`, `.endpoint` and `record_type` all silently null-bucket. Only `dt.openpipeline.source` is real — a split on any of the others produces a confident-looking chart of nothing."
+    },
+    {
+      "id": "schema-read-discipline",
+      "scored": false,
+      "derived_from": {
+        "file": "probes-config.md",
+        "probes": [
+          "A54"
+        ],
+        "validated": "2026-08-07"
+      },
+      "summary": "Read every `openpipeline.<scope>.*` schema DIRECTLY BY NAME. Never gate a read on `settings-schemas` discovery.",
+      "reason_not_scored": "A collection-discipline rule, not a measurement — it constrains HOW every other probe reads, and has no value of its own to score.",
+      "use": [
+        "collection",
+        "findings"
+      ],
+      "reason": "Schema discovery is unreliable for this entire family. Live: a regex over settings-schemas returned one unrelated hit and ZERO matches for the routing/pipelines schemas — all of which were real, populated and directly readable (17, 10 and 1 objects respectively). Broadening the regex surfaces decoy `internal.open-pipeline.*` schemas holding 0 objects.",
+      "why_it_matters_to_the_score": "This is a collection rule, not a scoring rule, but it protects the arithmetic: concluding a schema is absent from a discovery miss produces a false 'not adopted' reading that would depress NativeAdoptionBreadth and could trip the adoption gate on a tenant that has in fact adopted. The settings-schemas listing must never be used to conclude an openpipeline schema's absence — only a direct-by-name read can."
+    }
+  ]
+}
