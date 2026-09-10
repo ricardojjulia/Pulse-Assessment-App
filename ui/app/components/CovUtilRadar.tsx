@@ -3,6 +3,7 @@ import { useCurrentTheme } from "@dynatrace/strato-components/core";
 import { Flex } from "@dynatrace/strato-components/layouts";
 import { scoreBand, SCORE_BANDS } from "../utils/colors";
 import { hexToRgb, rgba, lighten, wrapText } from "../utils/canvas";
+import { useA11yMode } from "../hooks/useA11yMode";
 
 const bandForScore = scoreBand;
 
@@ -65,6 +66,7 @@ export const CovUtilRadar = React.memo(forwardRef<CovUtilRadarHandle, Props>(fun
   const activeIdx = controlledIdx !== undefined ? controlledIdx : internalIdx;
   const geoRef = useRef<{ cx: number; cy: number; R: number; N: number; SEG: number }>({ cx: 0, cy: 0, R: 0, N: 0, SEG: 0 });
   const legendGeoRef = useRef<{ covBox: { x: number; y: number; w: number; h: number }; utilBox: { x: number; y: number; w: number; h: number } } | null>(null);
+  const { a11yMode } = useA11yMode();
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [layerState, setVisibleLayer] = useState<"both" | "coverage" | "utilization">("both");
@@ -145,10 +147,22 @@ export const CovUtilRadar = React.memo(forwardRef<CovUtilRadarHandle, Props>(fun
     const minBlipR = hR + 6 + dotSizeBase + 4; // hub visual edge + dot radius + gap
     const showCov = visibleLayer === "both" || visibleLayer === "coverage";
     const showUtil = visibleLayer === "both" || visibleLayer === "utilization";
-    if (showCov) drawPoly(ctx, data.map(d => d.coverage), cx, cy, R, N, SEG, COV_C, dk, false, minBlipR);
+    if (showCov) {
+      drawPoly(ctx, data.map(d => d.coverage), cx, cy, R, N, SEG, COV_C, dk, false, minBlipR);
+      if (a11yMode) {
+        const pts = computePolyPoints(data.map(d => d.coverage), cx, cy, R, N, SEG, minBlipR);
+        drawHatch(ctx, pts, 4, 0);
+      }
+    }
 
     // ── Utilization polygon ──
-    if (showUtil) drawPoly(ctx, data.map(d => d.utilization), cx, cy, R, N, SEG, UTIL_C, dk, true, minBlipR);
+    if (showUtil) {
+      drawPoly(ctx, data.map(d => d.utilization), cx, cy, R, N, SEG, UTIL_C, dk, true, minBlipR);
+      if (a11yMode) {
+        const pts = computePolyPoints(data.map(d => d.utilization), cx, cy, R, N, SEG, minBlipR);
+        drawHatch(ctx, pts, 4, 45);
+      }
+    }
 
     // ── Raw score ghost polygons (consolidation active) — dashed outline showing original scores ──
     const hasRaw = data.some(d => d.rawCoverage !== undefined && d.rawCoverage !== d.coverage);
@@ -409,7 +423,7 @@ export const CovUtilRadar = React.memo(forwardRef<CovUtilRadarHandle, Props>(fun
       covBox: { x: covBoxX, y: covBoxY, w: covBoxW, h: covBoxH },
       utilBox: { x: matBoxX, y: matBoxY, w: matBoxW, h: matBoxH },
     };
-  }, [data, dk, COV_C, UTIL_C, activeIdx, legendLabels, visibleLayer, coverageOnly]);
+  }, [data, dk, COV_C, UTIL_C, activeIdx, legendLabels, visibleLayer, coverageOnly, a11yMode]);
 
   const hitTest = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -685,6 +699,86 @@ function diamondPath(ctx: CanvasRenderingContext2D, x: number, y: number, s: num
   ctx.lineTo(x, y + s);
   ctx.lineTo(x - s, y);
   ctx.closePath();
+}
+
+/**
+ * Computes the polygon vertex positions for a radar series.
+ * All coordinates are in logical (CSS) pixels — i.e. in the same coordinate
+ * space as the rest of the draw callback (after ctx.scale(dpr, dpr)).
+ */
+function computePolyPoints(
+  values: number[],
+  cx: number,
+  cy: number,
+  R: number,
+  N: number,
+  SEG: number,
+  minR = 3,
+): { x: number; y: number }[] {
+  return Array.from({ length: N }, (_, i) => {
+    const midA = i * SEG + SEG / 2 - Math.PI / 2;
+    const r = minR + (values[i] / 100) * (R - minR);
+    return { x: cx + Math.cos(midA) * r, y: cy + Math.sin(midA) * r };
+  });
+}
+
+/**
+ * Draws a hatch pattern clipped to the given polygon.
+ * `angleDeg = 0`  → horizontal lines (coverage polygon)
+ * `angleDeg = 45` → diagonal lines   (utilization polygon)
+ * Spacing is in logical pixels (same coordinate space as the polygon).
+ */
+function drawHatch(
+  ctx: CanvasRenderingContext2D,
+  points: { x: number; y: number }[],
+  spacing: number,
+  angleDeg: number,
+): void {
+  if (points.length < 3) return;
+  ctx.save();
+
+  // Clip to the polygon so only the interior receives hatch ink.
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+  ctx.closePath();
+  ctx.clip();
+
+  // Bounding box of the polygon.
+  const xs = points.map(p => p.x);
+  const ys = points.map(p => p.y);
+  const x0 = Math.min(...xs);
+  const x1 = Math.max(...xs);
+  const y0 = Math.min(...ys);
+  const y1 = Math.max(...ys);
+
+  ctx.beginPath();
+
+  if (angleDeg === 0) {
+    // Horizontal lines across the bounding box.
+    for (let y = y0; y <= y1 + spacing; y += spacing) {
+      ctx.moveTo(x0, y);
+      ctx.lineTo(x1, y);
+    }
+  } else {
+    // Diagonal lines: translate to bbox centre, rotate, then draw
+    // horizontal lines that extend far enough to cover every corner.
+    const pcx = (x0 + x1) / 2;
+    const pcy = (y0 + y1) / 2;
+    const halfDiag = Math.hypot(x1 - x0, y1 - y0) / 2 + spacing * 2;
+    ctx.translate(pcx, pcy);
+    ctx.rotate((angleDeg * Math.PI) / 180);
+    for (let y = -halfDiag; y <= halfDiag + spacing; y += spacing) {
+      ctx.moveTo(-halfDiag, y);
+      ctx.lineTo(halfDiag, y);
+    }
+  }
+
+  ctx.strokeStyle = "rgba(0,0,0,0.38)";
+  ctx.lineWidth = 0.8;
+  ctx.setLineDash([]);
+  ctx.stroke();
+  ctx.restore();
 }
 
 /**

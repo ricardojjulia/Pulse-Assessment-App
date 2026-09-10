@@ -3,6 +3,7 @@ import { useCurrentTheme } from "@dynatrace/strato-components/core";
 import type { CapabilityResult } from "../hooks/useCoverageData";
 import { scoreBand, SCORE_BANDS } from "../utils/colors";
 import { hexToRgb, rgba, lighten } from "../utils/canvas";
+import { useA11yMode } from "../hooks/useA11yMode";
 
 export function utilization(s: number) { return scoreBand(s); }
 
@@ -20,6 +21,7 @@ interface Props {
 export const TechRadar: React.FC<Props> = React.memo(({ capabilities, anim, activeIdx, size }) => {
   const ref = useRef<HTMLCanvasElement>(null);
   const dk = useCurrentTheme() === "dark";
+  const { a11yMode } = useA11yMode();
   const N = capabilities.length;
   const SEG = (Math.PI * 2) / N;
 
@@ -72,6 +74,7 @@ export const TechRadar: React.FC<Props> = React.memo(({ capabilities, anim, acti
     const dotSizeBase = Math.max(size * 0.016, 9);
     const hubR = hR + 6 + dotSizeBase + 4; // hub visual edge + dot radius + gap
     if (anim > 0 && N > 0) {
+      const polyPts: { x: number; y: number }[] = [];
       ctx.beginPath();
       for (let i = 0; i < N; i++) {
         const cap = capabilities[i];
@@ -80,6 +83,7 @@ export const TechRadar: React.FC<Props> = React.memo(({ capabilities, anim, acti
         const midA = i * SEG + SEG / 2 - Math.PI / 2;
         const px = cx + Math.cos(midA) * blipR;
         const py = cy + Math.sin(midA) * blipR;
+        polyPts.push({ x: px, y: py });
         if (i === 0) ctx.moveTo(px, py);
         else ctx.lineTo(px, py);
       }
@@ -91,6 +95,7 @@ export const TechRadar: React.FC<Props> = React.memo(({ capabilities, anim, acti
       ctx.setLineDash([6, 4]);
       ctx.stroke();
       ctx.setLineDash([]);
+      if (a11yMode) drawHatchTR(ctx, polyPts, 4, 0);
     }
 
     // ── Center hub (drawn before blips so blips appear on top) ──
@@ -184,12 +189,65 @@ export const TechRadar: React.FC<Props> = React.memo(({ capabilities, anim, acti
         ctx.globalAlpha = 1;
       }
     }
-  }, [capabilities, anim, activeIdx, size, N, SEG, dk]);
+  }, [capabilities, anim, activeIdx, size, N, SEG, dk, a11yMode]);
 
   useEffect(() => { draw(); }, [draw]);
 
   return <canvas ref={ref} role="img" aria-label={`Tech radar showing coverage scores for ${N} capabilities`} style={{ position: "absolute", top: 0, left: 0, width: size, height: size, cursor: "pointer" }} />;
 });
+
+/**
+ * Draws a hatch pattern clipped to the given polygon (TechRadar variant).
+ * Uses horizontal lines (angleDeg = 0) for the single capability polygon.
+ * Spacing is in logical CSS pixels (the same coordinate space as the polygon).
+ */
+function drawHatchTR(
+  ctx: CanvasRenderingContext2D,
+  points: { x: number; y: number }[],
+  spacing: number,
+  angleDeg: number,
+): void {
+  if (points.length < 3) return;
+  ctx.save();
+
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+  ctx.closePath();
+  ctx.clip();
+
+  const xs = points.map(p => p.x);
+  const ys = points.map(p => p.y);
+  const x0 = Math.min(...xs);
+  const x1 = Math.max(...xs);
+  const y0 = Math.min(...ys);
+  const y1 = Math.max(...ys);
+
+  ctx.beginPath();
+
+  if (angleDeg === 0) {
+    for (let y = y0; y <= y1 + spacing; y += spacing) {
+      ctx.moveTo(x0, y);
+      ctx.lineTo(x1, y);
+    }
+  } else {
+    const pcx = (x0 + x1) / 2;
+    const pcy = (y0 + y1) / 2;
+    const halfDiag = Math.hypot(x1 - x0, y1 - y0) / 2 + spacing * 2;
+    ctx.translate(pcx, pcy);
+    ctx.rotate((angleDeg * Math.PI) / 180);
+    for (let y = -halfDiag; y <= halfDiag + spacing; y += spacing) {
+      ctx.moveTo(-halfDiag, y);
+      ctx.lineTo(halfDiag, y);
+    }
+  }
+
+  ctx.strokeStyle = "rgba(0,0,0,0.38)";
+  ctx.lineWidth = 0.8;
+  ctx.setLineDash([]);
+  ctx.stroke();
+  ctx.restore();
+}
 
 /**
  * Renders the TechRadar chart (with labels, connectors and legend) to an

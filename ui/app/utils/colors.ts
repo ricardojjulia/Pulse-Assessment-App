@@ -1,4 +1,6 @@
 import Colors from "@dynatrace/strato-design-tokens/colors";
+import { useA11yMode } from "../hooks/useA11yMode";
+import { a11yScoreColor } from "./a11yColors";
 
 /**
  * Strato design-token colors for each scoring band (for JSX / inline styles).
@@ -47,4 +49,17 @@ export function scoreTokenColor(score: number): string {
 /** Maps a 0–100% score to a band label. */
 export function bandLabel(score: number): string {
   return scoreBand(score).label;
+}
+
+/**
+ * Hook returning a score-to-hex-color function appropriate for the current
+ * accessibility mode. When color-blind mode is active it returns
+ * `a11yScoreColor` (sequential blue scale); otherwise returns `scoreColor`
+ * (the standard red→green palette).
+ *
+ * Call at the component level — this is a React hook.
+ */
+export function useA11yScoreColor(): (score: number) => string {
+  const { a11yMode } = useA11yMode();
+  return a11yMode ? a11yScoreColor : scoreColor;
 }

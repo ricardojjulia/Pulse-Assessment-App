@@ -7,6 +7,8 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { useAssessmentHistory } from "./hooks/useAssessmentHistory";
 import { useCoverageData } from "./hooks/useCoverageData";
 import { useScaleTier } from "./hooks/useScaleTier";
+import { A11yProvider } from "./hooks/useA11yMode";
+import { A11yToggle } from "./components/A11yToggle";
 
 const CoverageAssessment = React.lazy(() =>
   import("./pages/CoverageAssessment").then(m => ({ default: m.CoverageAssessment }))
@@ -52,8 +54,13 @@ export const App = () => {
 
   return (
     <ErrorBoundary>
-      <Page>
-        <Page.Main>
+      <A11yProvider>
+        <Page>
+          <Page.Main>
+            {/* Color-blind mode toggle — fixed to top-right so it never affects page layout */}
+            <div style={{ position: "fixed", top: 8, right: 8, zIndex: 1000 }}>
+              <A11yToggle />
+            </div>
             <Routes>
               <Route path="/" element={
                 <ErrorBoundary>
@@ -84,8 +91,9 @@ export const App = () => {
                 </ErrorBoundary>
               } />
             </Routes>
-        </Page.Main>
-      </Page>
+          </Page.Main>
+        </Page>
+      </A11yProvider>
     </ErrorBoundary>
   );
 };
