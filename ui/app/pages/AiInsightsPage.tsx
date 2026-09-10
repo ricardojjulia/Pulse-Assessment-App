@@ -276,7 +276,7 @@ export const AiInsightsPage: React.FC<Props> = ({ coverageData, scale }) => {
                   All criteria passed — no recommendation needed.
                 </Text>
               ) : (
-                <DavisInsightSection state={state} capabilityName={cap.name} onSendFollowUp={sendFollowUp} onRequestInsight={requestInsight} />
+                <DavisInsightSection state={state} capabilityName={cap.name} onSendFollowUp={sendFollowUp} onRequestInsight={requestInsight} rateLimitedUntil={davisHandle.rateLimitedUntil} />
               )}
             </Container>
           );

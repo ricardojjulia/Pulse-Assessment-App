@@ -94,6 +94,10 @@ export interface UseDavisHandle {
   /** Continue an existing conversation on a capability. Capped at
    *  MAX_FOLLOWUPS per capability per session. */
   sendFollowUp: (capabilityName: string, text: string) => Promise<void>;
+  /** Epoch ms when the Davis rate-limit window expires. Set when any Davis
+   *  call returns HTTP 429 (25 req/user/15 min). Cleared on success or any
+   *  non-429 error. Undefined when not currently rate-limited. */
+  rateLimitedUntil?: number;
 }
 
 const MAX_FOLLOWUPS = 5;
@@ -104,11 +108,18 @@ function tenantIdFrom(envUrl: string | null): string {
   return m?.[1] ?? "unknown";
 }
 
+/** 15-minute rate-limit window in milliseconds (Davis CoPilot quota). */
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+
 export function useDavisRecommendations(
   capabilities: CapabilityResult[],
   { enabled }: UseDavisOptions,
 ): UseDavisHandle {
   const [map, setMap] = useState<DavisRecommendationMap>({});
+  /** Epoch ms when the current rate-limit window expires. Undefined when
+   *  not rate-limited. Set on any 429 response, cleared on success or
+   *  non-429 error. */
+  const [rateLimitedUntil, setRateLimitedUntil] = useState<number | undefined>(undefined);
   /** Signature of the last capabilities array we initialised for. Re-init
    *  only when the SET of failing criteria changes. */
   const lastSigRef = useRef<string>("");
@@ -222,6 +233,14 @@ export function useDavisRecommendations(
     }
 
     if (!result.ok) {
+      // Detect rate-limit (429) and record the expiry window. Any other error
+      // clears the rate-limit state (the window may have expired or this is
+      // a different failure).
+      if (result.err.status === 429) {
+        setRateLimitedUntil(Date.now() + RATE_LIMIT_WINDOW_MS);
+      } else {
+        setRateLimitedUntil(undefined);
+      }
       setMap(prev => ({
         ...prev,
         [capabilityName]: {
@@ -233,6 +252,9 @@ export function useDavisRecommendations(
       }));
       return;
     }
+
+    // Successful response — clear any prior rate-limit state.
+    setRateLimitedUntil(undefined);
 
     const rec = result.rec;
     stateRef.current[capabilityName] = rec.state;
@@ -316,6 +338,12 @@ export function useDavisRecommendations(
     }
 
     if (!result.ok) {
+      // Mirror requestInsight rate-limit tracking for follow-up calls.
+      if (result.err.status === 429) {
+        setRateLimitedUntil(Date.now() + RATE_LIMIT_WINDOW_MS);
+      } else {
+        setRateLimitedUntil(undefined);
+      }
       setMap(prev => {
         const cur = prev[capabilityName];
         if (!cur) return prev;
@@ -331,6 +359,9 @@ export function useDavisRecommendations(
       });
       return;
     }
+
+    // Successful follow-up — clear any prior rate-limit state.
+    setRateLimitedUntil(undefined);
 
     const rec = result.rec;
     stateRef.current[capabilityName] = rec.state;
@@ -362,5 +393,5 @@ export function useDavisRecommendations(
     });
   }, []);
 
-  return { byCapability: map, requestInsight, sendFollowUp };
+  return { byCapability: map, requestInsight, sendFollowUp, rateLimitedUntil };
 }
