@@ -1,0 +1,95 @@
+# Dynatrace Workflow — Scheduled Pulse Assessment
+# ─────────────────────────────────────────────────────────────────────────────
+# Import via: Settings → Automations → Workflows → Import
+#
+# What it does:
+#   1. Runs the Pulse Assessment API function on a weekly schedule.
+#   2. Sends a Slack alert when the score falls below 70.
+#
+# Prerequisites:
+#   1. Deploy the Pulse Assessment app to your tenant.
+#   2. Replace APP_ID below with your deployed app's ID (see app.config.json).
+#   3. Configure the Slack connection in Settings → Connections if you want
+#      the notification task. Delete the notify_slack task if you don't use Slack.
+#
+# The API function accepts an optional "tier" parameter:
+#   - "foundation"   → fastest run, only foundation-tier criteria
+#   - "bestPractice" → foundation + best-practice criteria
+#   - "excellence"   → all criteria (omit tier for the same result)
+# ─────────────────────────────────────────────────────────────────────────────
+
+id: pulse-assessment-scheduled
+title: "Pulse Assessment — Weekly Scheduled Run"
+
+trigger:
+  schedule:
+    rule: "0 8 * * MON"   # Every Monday at 08:00 UTC
+    timezone: UTC
+
+tasks:
+  run_assessment:
+    name: "Run Pulse Assessment"
+    action: dynatrace.automations:run-javascript
+    input:
+      script: |
+        import { execution } from '@dynatrace-sdk/automation-utils';
+
+        // ── Replace with your deployed app's ID ──────────────────────────
+        const APP_ID = "YOUR_APP_ID_HERE";
+        // e.g. const APP_ID = "my.esa.tenant.evaluator";
+        // ────────────────────────────────────────────────────────────────
+
+        // "foundation" keeps runtime well under 60 s on large tenants.
+        // Change to "bestPractice" or remove the tier key for a full run.
+        const tier = "foundation";
+
+        const tenantUrl = globalThis.TENANT_URL ?? "";
+
+        const response = await fetch(
+          `${tenantUrl}/api/v2/apps/${APP_ID}/functions/run-assessment`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tier }),
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `Assessment function returned HTTP ${response.status}: ${await response.text()}`,
+          );
+        }
+
+        const data = await response.json();
+
+        if (!data.success) {
+          throw new Error(`Assessment failed: ${data.error ?? "unknown error"}`);
+        }
+
+        return {
+          score: data.totalScore,
+          snapshotId: data.snapshotId,
+          capabilityScores: data.capabilityScores,
+          tenantUrl,
+          appId: APP_ID,
+        };
+
+  notify_slack:
+    name: "Notify Slack on Low Score"
+    action: dynatrace.slack:send-message
+    dependsOn:
+      - run_assessment
+    # Only fires when the score is below 70. Remove the condition to always notify.
+    condition: "{{ result('run_assessment').score < 70 }}"
+    input:
+      channel: "#observability-alerts"
+      message: |
+        :red_circle: *Pulse Assessment score: {{ result('run_assessment').score }}%*
+
+        The weekly scheduled assessment completed with a score below target.
+
+        Snapshot saved. Review the full report in the app:
+        {{ result('run_assessment').tenantUrl }}/ui/apps/{{ result('run_assessment').appId }}
+
+        Capability breakdown:
+        {{ result('run_assessment').capabilityScores | tojson(indent=2) }}
