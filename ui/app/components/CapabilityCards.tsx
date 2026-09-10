@@ -25,11 +25,21 @@ function formatCriterionValue(value: number, isRatio: boolean): string {
   return Number.isInteger(value) ? value.toLocaleString() : value.toLocaleString(undefined, { maximumFractionDigits: 1 });
 }
 
+/** Coverage score ≥ this AND utilization ≤ DIVERGENCE_UTIL_MAX → show gap badge. */
+const DIVERGENCE_COV_MIN = 70;
+/** Utilization score ≤ this AND coverage ≥ DIVERGENCE_COV_MIN → show gap badge. */
+const DIVERGENCE_UTIL_MAX = 30;
+
 interface Props {
   capabilities: CapabilityResult[];
   anim: number;
   activeIdx: number | null;
   onSelect: (idx: number | null) => void;
+  /** Current view mode — divergence badge only appears in "coverage" view. */
+  viewMode?: string;
+  /** Called when the user clicks the Cov-Util Gap badge.  The parent is
+   *  expected to switch to utilization view and scroll to this capability. */
+  onDivergenceBadgeClick?: (capabilityName: string) => void;
   /** Optional map of Davis CoPilot recommendations keyed by capability
    *  name. When provided, an "AI Insight" section renders under each
    *  expanded card. */
@@ -156,7 +166,7 @@ const CriterionRow: React.FC<{ cr: CapabilityResult["criteriaResults"][0]; dk: b
   );
 };
 
-export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim, activeIdx, onSelect, davisRecommendations, onSendFollowUp, onRequestInsight, onExplain }) => {
+export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim, activeIdx, onSelect, viewMode, onDivergenceBadgeClick, davisRecommendations, onSendFollowUp, onRequestInsight, onExplain }) => {
   const dk = useCurrentTheme() === "dark";
 
   // NB: NO auto-fire on expand. The user explicitly opted out of implicit
@@ -170,8 +180,10 @@ export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim
       {capabilities.map((cap, i) => {
         const ml = utilization(cap.score);
         const act = activeIdx === i;
+        const hasDivergence = cap.score >= DIVERGENCE_COV_MIN && (cap.utilization?.utilizationScore ?? 0) <= DIVERGENCE_UTIL_MAX;
+        const showDivergenceBadge = hasDivergence && viewMode === "coverage";
         return (
-          <Flex key={i} flexDirection="column" data-cap-idx={i}
+          <Flex key={i} id={`cap-${cap.name}`} flexDirection="column" data-cap-idx={i}
             role="button"
             tabIndex={0}
             aria-expanded={act}
@@ -247,6 +259,35 @@ export const CapabilityCards: React.FC<Props> = React.memo(({ capabilities, anim
                   background: ml.color + (dk ? "25" : "18"), color: ml.color, fontWeight: 600,
                   whiteSpace: "nowrap", flexShrink: 0,
                 }}>{ml.label}</Text>
+                {/* H6 — Coverage/Utilization divergence badge.
+                    Appears only in coverage view when a capability has strong
+                    coverage (≥70) but very low utilization (≤30). Clicking it
+                    switches to utilization view and scrolls to this card. */}
+                {showDivergenceBadge && (
+                  <Text
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${cap.name}: high coverage but low utilization — click to view in utilization mode`}
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation();
+                      onDivergenceBadgeClick?.(cap.name);
+                    }}
+                    onKeyDown={(e: React.KeyboardEvent) => {
+                      e.stopPropagation();
+                      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onDivergenceBadgeClick?.(cap.name); }
+                    }}
+                    style={{
+                      fontSize: 10, fontWeight: 700, cursor: "pointer",
+                      padding: "2px 7px", borderRadius: 6, userSelect: "none",
+                      whiteSpace: "nowrap", flexShrink: 0,
+                      color: Colors.Text.Warning.Default,
+                      background: Colors.Background.Container.Warning.Default,
+                      border: `1px solid ${Colors.Border.Warning.Default}`,
+                    }}
+                  >
+                    Cov-Util Gap
+                  </Text>
+                )}
                 {/* Active-user counts live on the Utilization cards only:
                     "is anyone looking at this data?" belongs next to how
                     deeply a capability is used, not next to its coverage. */}
