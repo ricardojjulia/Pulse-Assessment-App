@@ -34,6 +34,8 @@ import { usePreflight, type PreflightCheck } from "../hooks/usePreflight";
 import { applyTraceProxyMode } from "../trace-proxy";
 import { TraceProxyBanner } from "../components/TraceProxyBanner";
 import type { useAssessmentHistory } from "../hooks/useAssessmentHistory";
+import { useDegradationAlert } from "../hooks/useDegradationAlert";
+import { MiniSparkline } from "../components/MiniSparkline";
 import { CovUtilRadar, renderRadarToDataURL, type CovUtilRadarHandle } from "../components/CovUtilRadar";
 import { CapabilityScatter, renderScatterToDataURL } from "../components/CapabilityScatter";
 import { ConsolidationPanel } from "../components/ConsolidationPanel";
@@ -146,6 +148,24 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
    *  and in the reports, and never folded into a score. */
   const adoption = useAppAdoption(capabilities.length > 0);
 
+  /** F4 — Score Degradation Alert: compare latest run vs previous snapshot. */
+  const { degraded, dismissed: degradationDismissed, dismiss: dismissDegradation } = useDegradationAlert(capabilities, history.snapshots);
+
+  /** H6 — Coverage/Utilization divergence: count capabilities with high
+   *  coverage (≥70) but low utilization (≤30). */
+  const divergenceCount = useMemo(
+    () => capabilities.filter(c => c.score >= 70 && (c.utilization?.utilizationScore ?? 0) <= 30).length,
+    [capabilities],
+  );
+
+  /** H6 — Switch to utilization view and scroll to the capability card. */
+  const handleDivergenceBadgeClick = useCallback((capabilityName: string) => {
+    handleViewModeChange("utilization");
+    setTimeout(() => {
+      document.getElementById(`cap-${capabilityName}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 100);
+  }, []);
+
   /** Explain — reveals the AI section inside the capability card (dev-only;
    *  the card chip only renders when this handler is passed down).
    *
@@ -200,6 +220,22 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
       : CAPABILITIES.filter(c => !excludedCaps.has(c.name));
     return applyTraceProxyMode(selected.length > 0 ? selected : CAPABILITIES).info;
   }, [traceProxyMode, excludedCaps]);
+
+  /** U1 — Sparkline data for idle capability cards.
+   *  Take up to 5 most-recent snapshots (index 0 = newest), reverse so the
+   *  array is oldest-first, then map to each capability's score. */
+  const sparklineData = useMemo<Record<string, number[]>>(() => {
+    const recent = history.snapshots.slice(0, 5).reverse();
+    if (recent.length < 2) return {};
+    const map: Record<string, number[]> = {};
+    for (const snap of recent) {
+      for (const capSnap of snap.capabilities) {
+        if (!map[capSnap.name]) map[capSnap.name] = [];
+        map[capSnap.name].push(capSnap.score);
+      }
+    }
+    return map;
+  }, [history.snapshots]);
 
   const t0 = useRef<number>(0);
   const dk = useCurrentTheme() === "dark";
@@ -444,7 +480,8 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
                     bgSurface={bgSurface} bgSubtle={bgSubtle} border={border}
                     selected={!excludedCaps.has(cap.name)}
                     onToggle={() => toggleCap(cap.name)}
-                    onClick={() => setSelectedCap(cap.name)} />
+                    onClick={() => setSelectedCap(cap.name)}
+                    trendData={sparklineData[cap.name] ?? []} />
                 ))}
               </Grid>
               </>
@@ -474,6 +511,41 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
       {/* Chart */}
       {!idle && !loading && capabilities.length > 0 && (
         <>
+          {/* F4 — Score Degradation Alert banner */}
+          {degraded.length > 0 && !degradationDismissed && (
+            <Flex alignItems="center" gap={8} flexWrap="wrap" style={{
+              padding: "8px 16px", flexShrink: 0,
+              background: Colors.Background.Container.Warning.Default,
+              borderBottom: `1px solid ${Colors.Border.Warning.Default}`,
+            }}>
+              <Text style={{ fontSize: 13, fontWeight: 700, color: Colors.Text.Warning.Default, flexShrink: 0 }}>
+                ⚠ Score drop detected:
+              </Text>
+              <Text style={{ fontSize: 12, color: Colors.Text.Warning.Default, flex: 1 }}>
+                {degraded.map(d => `${d.name} (${d.previous} → ${d.current})`).join(", ")}
+              </Text>
+              <Text
+                role="button"
+                tabIndex={0}
+                aria-label="View score history"
+                onClick={() => navigate("/compare")}
+                onKeyDown={(e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); navigate("/compare"); } }}
+                style={{ fontSize: 12, fontWeight: 600, color: Colors.Text.Warning.Default, cursor: "pointer", textDecoration: "underline", whiteSpace: "nowrap", flexShrink: 0 }}
+              >
+                View history →
+              </Text>
+              <Text
+                role="button"
+                tabIndex={0}
+                aria-label="Dismiss degradation alert"
+                onClick={dismissDegradation}
+                onKeyDown={(e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); dismissDegradation(); } }}
+                style={{ fontSize: 14, fontWeight: 700, color: Colors.Text.Warning.Default, cursor: "pointer", padding: "0 4px", flexShrink: 0, lineHeight: 1 }}
+              >
+                ×
+              </Text>
+            </Flex>
+          )}
           {/* Toolbar */}
           <Flex alignItems="center" gap={8} flexWrap="wrap" style={{ padding: "6px 16px", flexShrink: 0, borderBottom: `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}` }}>
             <Button onClick={goHome} size="condensed">← Back</Button>
@@ -490,6 +562,26 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
                 ]}
               />
             </Flex>
+            {/* H6 — Divergence summary chip in toolbar */}
+            {divergenceCount > 0 && viewMode === "coverage" && (
+              <Text
+                role="button"
+                tabIndex={0}
+                aria-label={`${divergenceCount} capability gap${divergenceCount > 1 ? "s" : ""} — high coverage, low utilization`}
+                onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleViewModeChange("utilization"); }}
+                onKeyDown={(e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleViewModeChange("utilization"); } }}
+                style={{
+                  fontSize: 11, fontWeight: 700, cursor: "pointer",
+                  padding: "3px 10px", borderRadius: 8, userSelect: "none",
+                  whiteSpace: "nowrap", flexShrink: 0,
+                  color: Colors.Text.Warning.Default,
+                  background: Colors.Background.Container.Warning.Default,
+                  border: `1px solid ${Colors.Border.Warning.Default}`,
+                }}
+              >
+                ⚠ {divergenceCount} gap{divergenceCount > 1 ? "s" : ""}
+              </Text>
+            )}
             <Button onClick={() => navigate("/compare")} variant="emphasized" color="primary">
               Evolution Over Time
               {history.snapshots.length > 0 && (
@@ -646,7 +738,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
               borderTop: isMobile ? `1px solid ${dk ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}` : "none",
               maxHeight: isMobile ? "50vh" : undefined,
             }}>
-              <CapabilityCards capabilities={capabilities} anim={anim} activeIdx={activeIdx} onSelect={setActiveIdx} davisRecommendations={davisHandle.byCapability} onSendFollowUp={davisHandle.sendFollowUp} onRequestInsight={davisHandle.requestInsight} onExplain={explainCapability} />
+              <CapabilityCards capabilities={capabilities} anim={anim} activeIdx={activeIdx} onSelect={setActiveIdx} viewMode={viewMode} onDivergenceBadgeClick={handleDivergenceBadgeClick} davisRecommendations={davisHandle.byCapability} onSendFollowUp={davisHandle.sendFollowUp} onRequestInsight={davisHandle.requestInsight} onExplain={explainCapability} />
             </Flex>
           </>) : viewMode === "utilization" ? (
             <UtilizationView capabilities={capabilities} dk={dk} text={text} textSec={textSec} textTert={textTert} overallUtilizationLevel={overallUtilizationLevel} collapseKey={collapseKey} isMobile={isMobile} adoptionByCapability={adoption.unavailable ? undefined : adoption.byCapability} adoptionTotalUsers={adoption.totalUsers} davisRecommendations={davisHandle.byCapability} onSendFollowUp={davisHandle.sendFollowUp} onRequestInsight={davisHandle.requestInsight} onExplain={() => { /* card expands itself; no Davis call here */ }} />
@@ -2071,12 +2163,14 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({ dk, text, textSec, tex
 });
 
 /* ── Card for grid view (click to zoom) ── */
-function IdleCapCard({ cap, dk, text, textSec, bgSurface, bgSubtle, border, selected, onToggle, onClick }: {
+function IdleCapCard({ cap, dk, text, textSec, bgSurface, bgSubtle, border, selected, onToggle, onClick, trendData }: {
   cap: { name: string; color: string; criteria: { id: string; label: string }[] };
   dk: boolean; text: string; textSec: string; textTert: string;
   bgSurface: string; bgSubtle: string; border: string;
   selected: boolean; onToggle: () => void;
   onClick: () => void;
+  /** U1 — optional sparkline data (5-point score trend, oldest first). */
+  trendData?: number[];
 }) {
   const summary = CAP_SUMMARIES[cap.name] || "";
   return (
@@ -2091,7 +2185,16 @@ function IdleCapCard({ cap, dk, text, textSec, bgSurface, bgSubtle, border, sele
     >
       <Flex alignItems="center" gap={8} style={{ marginBottom: 12 }}>
         <Text style={{ width: 14, height: 14, borderRadius: "50%", background: selected ? cap.color : (dk ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)"), flexShrink: 0 }} />
-        <Text style={{ fontSize: 14, fontWeight: 700, color: text, flex: 1 }}>{cap.name}</Text>
+        <Flex flexDirection="column" style={{ flex: 1, minWidth: 0 }}>
+          <Text style={{ fontSize: 14, fontWeight: 700, color: text }}>{cap.name}</Text>
+          {/* U1 — inline sparkline showing score trend from last 5 snapshots */}
+          {trendData && trendData.length >= 2 && (
+            <Flex alignItems="center" gap={6} style={{ marginTop: 4 }}>
+              <MiniSparkline data={trendData} />
+              <Text style={{ fontSize: 10, color: textSec, opacity: 0.7 }}>trend</Text>
+            </Flex>
+          )}
+        </Flex>
         <Flex alignItems="center" gap={6}>
           <Text style={{ fontSize: 12, color: textSec, fontWeight: 700, background: bgSubtle, padding: "3px 12px", borderRadius: 10 }}>{cap.criteria.length}</Text>
           <Text
