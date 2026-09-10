@@ -32,10 +32,13 @@ import Colors from "@dynatrace/strato-design-tokens/colors";
 import { Button } from "@dynatrace/strato-components/buttons";
 import { Flex, Container } from "@dynatrace/strato-components/layouts";
 import { Text, Strong } from "@dynatrace/strato-components/typography";
+import { Skeleton, SkeletonText } from "@dynatrace/strato-components/content";
 import type { CoverageData } from "../hooks/useCoverageData";
 import type { UseScaleTierResult } from "../hooks/useScaleTier";
 import { useDavisRecommendations } from "../hooks/useDavisRecommendations";
-import { DavisInsightSection } from "../components/DavisInsightSection";
+import { useDavisSynthesis } from "../hooks/useDavisSynthesis";
+import { useCountdown } from "../hooks/useCountdown";
+import { DavisInsightSection, renderMarkdown } from "../components/DavisInsightSection";
 import { ScaleTierBanner } from "../components/ScaleTierBanner";
 
 interface Props {
@@ -67,6 +70,11 @@ export const AiInsightsPage: React.FC<Props> = ({ coverageData, scale }) => {
   const recommendations = davisHandle.byCapability;
   const sendFollowUp = davisHandle.sendFollowUp;
   const requestInsight = davisHandle.requestInsight;
+
+  // Cross-capability synthesis hook (10th Davis call, user-initiated).
+  const synthesis = useDavisSynthesis(recommendations, capabilities);
+  // Countdown timer for synthesis-specific rate-limit window.
+  const synthCountdown = useCountdown(synthesis.rateLimitedUntil);
 
   // Sort capabilities by score ascending so the worst-performing (most
   // actionable) capability lands at the top. We rebuild this on every
@@ -102,6 +110,13 @@ export const AiInsightsPage: React.FC<Props> = ({ coverageData, scale }) => {
     }
     return { withInsight, cached, errored, pending, perfect, idle };
   }, [capabilities, recommendations]);
+
+  // Number of capabilities that have a successful Davis recommendation —
+  // used to gate the "Generate synthesis" button (min 3 required).
+  const doneCount = useMemo(
+    () => Object.values(recommendations).filter(s => s.status === "success").length,
+    [recommendations],
+  );
 
   // Theme-aware tokens.
   const bg = Colors.Background.Base.Default;
@@ -210,6 +225,116 @@ export const AiInsightsPage: React.FC<Props> = ({ coverageData, scale }) => {
 
       {/* ── Cards grid ─────────────────────────────────────────────── */}
       <Flex flexDirection="column" gap={12} style={{ padding: "16px 24px 32px 24px" }}>
+
+        {/* ── Synthesis card (A2) — must appear BEFORE per-capability cards ── */}
+        <Container color="neutral" variant="default"
+          style={{
+            padding: 16,
+            borderLeft: `4px solid ${accent}`,
+          }}>
+          {/* Card header: title + subtext + action button */}
+          <Flex flexDirection="row" alignItems="flex-start" justifyContent="space-between"
+            style={{ marginBottom: 8, gap: 12 }}>
+            <Flex flexDirection="column" gap={2}>
+              <Text style={{ fontSize: 15, fontWeight: 700, color: text }}>
+                Cross-capability Priorities
+              </Text>
+              <Text style={{ fontSize: 11, color: textSec }}>
+                Synthesizes all 9 capability recommendations into the top 3 priorities
+              </Text>
+            </Flex>
+            <Button
+              size="condensed"
+              variant="emphasized"
+              color="primary"
+              disabled={
+                doneCount < 3 ||
+                synthesis.status === "loading" ||
+                synthesis.status === "done" ||
+                (synthesis.status === "error" &&
+                  synthesis.rateLimitedUntil !== undefined &&
+                  synthCountdown.label !== null)
+              }
+              onClick={() => void synthesis.requestSynthesis()}
+              aria-label="Generate cross-capability synthesis from Davis CoPilot"
+            >
+              {synthesis.status === "loading" ? "Generating…" : "Generate synthesis"}
+            </Button>
+          </Flex>
+
+          {/* Disabled hint when not enough individual recommendations exist */}
+          {doneCount < 3 && synthesis.status === "idle" && (
+            <Text style={{ fontSize: 11, color: textSec, fontStyle: "italic" }}>
+              Generate at least 3 capability insights first
+            </Text>
+          )}
+
+          {/* Loading skeleton */}
+          {synthesis.status === "loading" && (
+            <Flex flexDirection="column" gap={4} style={{ marginTop: 4 }}>
+              <Skeleton height={10} width="55%" />
+              <SkeletonText lines={4} />
+            </Flex>
+          )}
+
+          {/* Successful synthesis */}
+          {synthesis.status === "done" && synthesis.text && (
+            <Flex flexDirection="column" style={{ marginTop: 4 }}>
+              <Flex flexDirection="column" gap={2}>
+                {renderMarkdown(synthesis.text, text, accent)}
+              </Flex>
+              <Text style={{
+                fontSize: 10, color: textSec, fontStyle: "italic", marginTop: 8,
+              }}>
+                AI-generated · may contain inaccuracies · verify before acting
+              </Text>
+            </Flex>
+          )}
+
+          {/* Error state */}
+          {synthesis.status === "error" && (
+            <Flex flexDirection="column" gap={6} style={{ marginTop: 4 }}>
+              {synthesis.rateLimitedUntil !== undefined && synthCountdown.label !== null ? (
+                // Rate-limited: show countdown, button is disabled above
+                <Text style={{
+                  fontSize: 11, fontWeight: 700,
+                  color: Colors.Charts.Status.Warning.Default,
+                }}>
+                  {`Rate limited — retry in ${synthCountdown.label}`}
+                </Text>
+              ) : (
+                // Non-rate-limited error: show message + retry button
+                <>
+                  <Text style={{
+                    fontSize: 11, fontWeight: 700,
+                    color: Colors.Text.Critical.Default,
+                  }}>
+                    Davis CoPilot synthesis error
+                  </Text>
+                  {synthesis.error && (
+                    <Text style={{
+                      fontSize: 11, color: text,
+                      wordBreak: "break-word", lineHeight: 1.5,
+                    }}>
+                      {synthesis.error}
+                    </Text>
+                  )}
+                  <Flex flexDirection="row">
+                    <Button
+                      size="condensed"
+                      onClick={() => void synthesis.requestSynthesis()}
+                      aria-label="Retry cross-capability synthesis"
+                    >
+                      Retry
+                    </Button>
+                  </Flex>
+                </>
+              )}
+            </Flex>
+          )}
+        </Container>
+
+        {/* ── Per-capability cards ─────────────────────────────────── */}
         {sorted.map((cap) => {
           const state = recommendations[cap.name];
           const failed = cap.criteriaResults.filter(cr => cr.points === 0 && !cr.error).length;

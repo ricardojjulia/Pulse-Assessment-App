@@ -183,6 +183,55 @@ export function buildFollowUpInstruction(): string {
   );
 }
 
+/** Minimal view of the recommendation map needed to build the synthesis
+ *  prompt. Using a structural alias avoids a circular import between
+ *  promptTemplates.ts (in ai/) and useDavisRecommendations.ts (in hooks/). */
+type CapabilitySynthesisMap = Record<string, { rec?: { text: string } } | undefined>;
+
+/**
+ * Build the cross-capability synthesis prompt for the 10th Davis call.
+ *
+ * Summarises each capability's score and the first 150 chars of its Davis
+ * recommendation (or "No recommendation yet" for idle/skipped capabilities).
+ * The total prompt stays under ~2000 chars.
+ *
+ * Not cached — synthesis is always freshly generated on explicit user request.
+ */
+export function buildSynthesisPrompt(
+  byCapability: CapabilitySynthesisMap,
+  capabilities: CapabilityResult[],
+): { text: string; instruction: string } {
+  const lines = capabilities.map(cap => {
+    const state = byCapability[cap.name];
+    const recText = state?.rec?.text
+      ? clamp(state.rec.text.replace(/\n+/g, " "), 150)
+      : "No recommendation yet";
+    return `- ${cap.name} (score: ${cap.score}%): ${recText}`;
+  });
+
+  const text =
+    `I'm a Dynatrace SE who just completed a full observability coverage ` +
+    `assessment across 9 capabilities. Here are the scores and current ` +
+    `AI improvement recommendations for each capability:\n\n` +
+    lines.join("\n") +
+    `\n\nBased on these 9 capability assessments, what are the top 3 ` +
+    `cross-capability improvement priorities I should focus on in the next ` +
+    `30 days? Please be specific and actionable, and reference which ` +
+    `capabilities each priority addresses.`;
+
+  const instruction =
+    `Write in a clear, professional tone for a Dynatrace SE presenting to a ` +
+    `customer. Identify exactly 3 cross-capability priorities as numbered ` +
+    `sections: "## 1. <title>", "## 2. <title>", "## 3. <title>". ` +
+    `Each priority must: (a) span at least 2 capabilities, ` +
+    `(b) explain the business rationale in 1-2 sentences, ` +
+    `(c) include one concrete Dynatrace action. ` +
+    `Keep the total reply under 300 words. Avoid code blocks, emoji, ` +
+    `and invented URLs.`;
+
+  return { text, instruction };
+}
+
 /** Build a signature of the failed-criteria set. Same signature → same
  *  recommendations should be returned, so this is the cache key salt.
  *
