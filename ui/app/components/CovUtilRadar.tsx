@@ -50,13 +50,17 @@ interface Props {
    *  legend entry. Used where the chart is meant to answer a single
    *  question and the comparison would only add noise. */
   coverageOnly?: boolean;
+  /** Optional overlay: a second tenant's coverage scores drawn as an amber dashed polygon. */
+  compareData?: Array<{ name: string; score: number }>;
+  /** Label shown in the legend for the compare overlay (e.g. tenant name). */
+  compareLabel?: string;
 }
 
 export interface CovUtilRadarHandle {
   toDataURL: () => string | null;
 }
 
-export const CovUtilRadar = React.memo(forwardRef<CovUtilRadarHandle, Props>(function CovUtilRadar({ data, coverageColor, utilizationColor, legendLabels, activeIdx: controlledIdx, onSelect, coverageOnly = false }, ref) {
+export const CovUtilRadar = React.memo(forwardRef<CovUtilRadarHandle, Props>(function CovUtilRadar({ data, coverageColor, utilizationColor, legendLabels, activeIdx: controlledIdx, onSelect, coverageOnly = false, compareData, compareLabel }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dk = useCurrentTheme() === "dark";
@@ -170,6 +174,33 @@ export const CovUtilRadar = React.memo(forwardRef<CovUtilRadarHandle, Props>(fun
       const RAW_C = dk ? "#ffffff" : "#888888";
       if (showCov) drawPoly(ctx, data.map(d => d.rawCoverage ?? d.coverage), cx, cy, R, N, SEG, RAW_C, dk, true, minBlipR);
       if (showUtil) drawPoly(ctx, data.map(d => d.rawUtilization ?? d.utilization), cx, cy, R, N, SEG, RAW_C, dk, true, minBlipR);
+    }
+
+    // ── Compare overlay polygon (second tenant — amber dashed) ──
+    if (compareData && compareData.length > 0) {
+      const COMP_C = "#f59e0b";
+      const compRgb = hexToRgb(COMP_C);
+      const compValues = data.map(d => {
+        const match = compareData.find(c => c.name === d.name);
+        return match?.score ?? 0;
+      });
+      ctx.beginPath();
+      for (let i = 0; i < N; i++) {
+        const midA = i * SEG + SEG / 2 - Math.PI / 2;
+        const r = minBlipR + (compValues[i] / 100) * (R - minBlipR);
+        const px = cx + Math.cos(midA) * r;
+        const py = cy + Math.sin(midA) * r;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fillStyle = rgba(compRgb, dk ? 0.07 : 0.06);
+      ctx.fill();
+      ctx.setLineDash([5, 4]);
+      ctx.strokeStyle = rgba(compRgb, dk ? 0.75 : 0.65);
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
 
     // ── Center hub (drawn before blips so blips appear on top) ──
@@ -423,7 +454,33 @@ export const CovUtilRadar = React.memo(forwardRef<CovUtilRadarHandle, Props>(fun
       covBox: { x: covBoxX, y: covBoxY, w: covBoxW, h: covBoxH },
       utilBox: { x: matBoxX, y: matBoxY, w: matBoxW, h: matBoxH },
     };
-  }, [data, dk, COV_C, UTIL_C, activeIdx, legendLabels, visibleLayer, coverageOnly, a11yMode]);
+
+    // ── Compare overlay legend entry (amber dashed) ──
+    if (compareData && compareData.length > 0) {
+      const COMP_C = "#f59e0b";
+      const compLabel = compareLabel ?? "Compare";
+      ctx.font = `700 ${legFont}px system-ui,sans-serif`;
+      const compLabelW = ctx.measureText(compLabel).width;
+      const compItemGap = 14;
+      const compIconW = 16;
+      // Position it centered below the two existing legend items
+      const compStartX = cx - (compIconW + iconGap + compLabelW) / 2;
+      const compY = legY - legFont - 10;
+      ctx.globalAlpha = 1;
+      ctx.setLineDash([5, 4]);
+      ctx.strokeStyle = COMP_C;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(compStartX, compY);
+      ctx.lineTo(compStartX + compIconW, compY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = dk ? "#e0e0f8" : "#2a2a3e";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(compLabel, compStartX + compIconW + compItemGap, compY);
+    }
+  }, [data, dk, COV_C, UTIL_C, activeIdx, legendLabels, visibleLayer, coverageOnly, a11yMode, compareData, compareLabel]);
 
   const hitTest = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;

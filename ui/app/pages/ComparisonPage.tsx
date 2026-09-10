@@ -15,6 +15,8 @@ import type { AssessmentSnapshot } from "../hooks/useAssessmentHistory";
 import type { CapabilityResult } from "../hooks/useCoverageData";
 import { FOUNDATION_WEIGHT, BEST_PRACTICE_WEIGHT, EXCELLENCE_WEIGHT } from "../hooks/useCoverageData";
 import { SegmentedControl } from "../components/SegmentedControl";
+import { exportSnapshot, importSnapshot } from "../utils/snapshotExport";
+import type { PortableSnapshot } from "../utils/snapshotExport";
 
 /** Lookup: criterion ID → true if it uses cross-entity ratio (queryB). Derived from static CAPABILITIES definition. */
 const IS_RATIO_MAP: Record<string, boolean> = {};
@@ -120,6 +122,15 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, saveSnapshot }) => 
   const [isMobile, setIsMobile] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
+  // U7: Trend view state
+  const [viewMode, setViewMode] = useState<"avb" | "trend">("avb");
+  const [trendCap, setTrendCap] = useState<string>("");
+
+  // F2: Multi-tenant compare state
+  const [compareSnapshot, setCompareSnapshot] = useState<PortableSnapshot | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     const el = rootRef.current;
     const calc = () => {
@@ -214,6 +225,34 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, saveSnapshot }) => 
     };
   }, [snapA, snapB, idxA, idxB]);
 
+  // U7: All capability names across snapshots (sorted)
+  const trendCapNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const snap of available) {
+      for (const cap of snap.capabilities) names.add(cap.name);
+    }
+    return [...names].sort();
+  }, [available]);
+
+  // U7: Effective trend capability (default to first alphabetically)
+  const effectiveTrendCap = trendCap || trendCapNames[0] || "";
+
+  // U7: Trend data for selected capability
+  const trendData = useMemo(() => {
+    if (!effectiveTrendCap) return [];
+    return snapshots
+      .filter(s => s.capabilities?.some(c => c.name === effectiveTrendCap))
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+      .map(s => {
+        const cap = s.capabilities.find(c => c.name === effectiveTrendCap)!;
+        return {
+          timestamp: new Date(s.timestamp).getTime(),
+          coverage: cap.score,
+          utilization: cap.utilizationScore ?? 0,
+        };
+      });
+  }, [snapshots, effectiveTrendCap]);
+
   /* ── Empty state ── */
   if (available.length < 2) {
     return (
@@ -226,6 +265,17 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, saveSnapshot }) => 
       </Flex>
     );
   }
+
+  // F2: handle file import
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Reset input so the same file can be re-imported
+    e.target.value = "";
+    importSnapshot(file)
+      .then(snap => { setCompareSnapshot(snap); setImportError(null); })
+      .catch(err => { setImportError((err as Error).message); setCompareSnapshot(null); });
+  };
 
   const snapPickerBtn = (label: string, snap: AssessmentSnapshot | null, isOpen: boolean, toggle: () => void, color: string) => {
     const mat = snap ? Math.round(snap.capabilities.reduce((s, c) => s + computeUtilization(c.criteriaResults), 0) / (snap.capabilities.length || 1)) : 0;
@@ -284,28 +334,114 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, saveSnapshot }) => 
 
   return (
     <Flex flexDirection="column" ref={rootRef} onClick={() => { setSelectedCap(null); setShowListA(false); setShowListB(false); }} style={{ fontFamily: "inherit", background: bg, color: text, height: "100%", padding: "4px 16px", overflow: "auto" }}>
-      {/* Header + A/B Selectors — compact single row */}
+      {/* Header + A/B Selectors + view mode toggle — compact single row */}
       <Flex alignItems="center" gap={8} flexWrap="wrap" style={{ marginBottom: 4 }} onClick={(e) => e.stopPropagation()}>
         <Tooltip text="Return to the main assessment page." position="bottom">
         <Button onClick={() => navigate("/")} size="condensed">← Back</Button>
         </Tooltip>
         <Text style={{ fontSize: 14, fontWeight: 800, whiteSpace: "nowrap" }}>Evolution</Text>
-        <Flex flexDirection="column" style={{ position: "relative", flex: 1, minWidth: 160, maxWidth: 320 }}>
-          {snapPickerBtn("A", snapA, showListA, () => { setShowListA(v => !v); setShowListB(false); }, Colors.Charts.Categorical.Color01.Default)}
-          {showListA && snapDropdown(idxA, (i) => { setIdxA(i); setShowListA(false); }, idxB, Colors.Charts.Categorical.Color01.Default)}
-        </Flex>
-        <Text style={{ color: textTert, fontSize: 12, fontWeight: 700 }}>vs</Text>
-        <Flex flexDirection="column" style={{ position: "relative", flex: 1, minWidth: 160, maxWidth: 320 }}>
-          {snapPickerBtn("B", snapB, showListB, () => { setShowListB(v => !v); setShowListA(false); }, Colors.Charts.Categorical.Color14.Default)}
-          {showListB && snapDropdown(idxB, (i) => { setIdxB(i); setShowListB(false); }, idxA, Colors.Charts.Categorical.Color14.Default)}
-        </Flex>
+        <SegmentedControl
+          value={viewMode}
+          onChange={setViewMode}
+          options={[
+            { value: "avb", label: "A vs B" },
+            { value: "trend", label: "Trend" },
+          ]}
+        />
+        {viewMode === "avb" && (
+          <>
+            <Flex flexDirection="column" style={{ position: "relative", flex: 1, minWidth: 160, maxWidth: 320 }}>
+              {snapPickerBtn("A", snapA, showListA, () => { setShowListA(v => !v); setShowListB(false); }, Colors.Charts.Categorical.Color01.Default)}
+              {showListA && snapDropdown(idxA, (i) => { setIdxA(i); setShowListA(false); }, idxB, Colors.Charts.Categorical.Color01.Default)}
+            </Flex>
+            <Text style={{ color: textTert, fontSize: 12, fontWeight: 700 }}>vs</Text>
+            <Flex flexDirection="column" style={{ position: "relative", flex: 1, minWidth: 160, maxWidth: 320 }}>
+              {snapPickerBtn("B", snapB, showListB, () => { setShowListB(v => !v); setShowListA(false); }, Colors.Charts.Categorical.Color14.Default)}
+              {showListB && snapDropdown(idxB, (i) => { setIdxB(i); setShowListB(false); }, idxA, Colors.Charts.Categorical.Color14.Default)}
+            </Flex>
+          </>
+        )}
+        {viewMode === "trend" && trendCapNames.length > 0 && (
+          <select
+            value={effectiveTrendCap}
+            onChange={e => setTrendCap(e.target.value)}
+            style={{
+              padding: "4px 8px", borderRadius: 6, border: `1px solid ${border}`,
+              background: card, color: text, fontFamily: "inherit", fontSize: 12, cursor: "pointer",
+            }}
+          >
+            {trendCapNames.map(name => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+        )}
       </Flex>
 
-      {idxA === idxB && (
+      {/* F2: Import/Export toolbar */}
+      <Flex alignItems="center" gap={6} flexWrap="wrap" style={{ marginBottom: 4 }} onClick={(e) => e.stopPropagation()}>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json"
+          style={{ display: "none" }}
+          onChange={handleFileChange}
+        />
+        <Button size="condensed" onClick={() => fileInputRef.current?.click()}>
+          Import tenant JSON
+        </Button>
+        {compareSnapshot && (
+          <>
+            <Text style={{ fontSize: 12, color: textSec }}>
+              Overlaying: <strong>{compareSnapshot.tenant}</strong>
+            </Text>
+            <Button size="condensed" onClick={() => { setCompareSnapshot(null); setImportError(null); }}>
+              Clear
+            </Button>
+          </>
+        )}
+        {importError && (
+          <Text style={{ fontSize: 12, color: Colors.Text.Critical.Default }}>{importError}</Text>
+        )}
+        {snapA && (
+          <Button size="condensed" onClick={() => exportSnapshot(snapA.capabilities, snapA.tenant)}>
+            Export A
+          </Button>
+        )}
+      </Flex>
+
+      {/* U7: Trend view */}
+      {viewMode === "trend" && (
+        <Flex flexDirection="column" style={{ flex: 1, minHeight: 0, padding: "4px 0" }}>
+          {trendData.length < 2 ? (
+            <Flex flexDirection="column" alignItems="center" justifyContent="center" style={{ padding: 40, color: textSec, fontSize: 13 }}>
+              Not enough history — run the assessment at least twice with <strong style={{ margin: "0 4px" }}>{effectiveTrendCap}</strong> to see a trend.
+            </Flex>
+          ) : (
+            <Flex flexDirection="column" style={{ background: card, border: `1px solid ${border}`, borderRadius: 12, padding: "12px 16px", flex: 1, minHeight: 220 }}>
+              <Text style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>{effectiveTrendCap} — Score over time</Text>
+              <Flex alignItems="center" gap={12} style={{ marginBottom: 8, fontSize: 12 }}>
+                <Flex alignItems="center" gap={4}>
+                  <span style={{ display: "inline-block", width: 12, height: 3, background: "#134fc9", borderRadius: 2 }} />
+                  <Text style={{ fontSize: 12 }}>Coverage</Text>
+                </Flex>
+                <Flex alignItems="center" gap={4}>
+                  <svg width={16} height={4}><line x1={0} y1={2} x2={16} y2={2} stroke="#9333ea" strokeWidth={2} strokeDasharray="4 2" /></svg>
+                  <Text style={{ fontSize: 12 }}>Utilization</Text>
+                </Flex>
+              </Flex>
+              <Flex style={{ flex: 1, minHeight: 160 }}>
+                <TrendChart data={trendData} coverageColor="#134fc9" utilizationColor="#9333ea" dk={dk} />
+              </Flex>
+            </Flex>
+          )}
+        </Flex>
+      )}
+
+      {viewMode === "avb" && idxA === idxB && (
         <Flex flexDirection="column" style={{ textAlign: "center", padding: 40, color: textSec, fontSize: 13 }}>Select two different snapshots to compare.</Flex>
       )}
 
-      {comparison && (
+      {viewMode === "avb" && comparison && (
         <Flex flexDirection="column" style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
           {/* KPI Summary — compact inline */}
           <Flex alignItems="center" gap={6} flexWrap="wrap" style={{ marginBottom: 4 }}>
@@ -362,6 +498,8 @@ export const ComparisonPage: React.FC<Props> = ({ snapshots, saveSnapshot }) => 
                   legendLabels={[`A ${fmtShort(comparison.current.timestamp)}`, `B ${fmtShort(comparison.baseline.timestamp)}`]}
                   activeIdx={selectedCap ? comparison.capDiffs.findIndex(c => c.name === selectedCap) : null}
                   onSelect={(idx) => setSelectedCap(idx !== null && idx >= 0 ? comparison.capDiffs[idx]?.name ?? null : null)}
+                  compareData={compareSnapshot?.capabilities}
+                  compareLabel={compareSnapshot?.tenant}
                 />
               </Flex>
             </Flex>
@@ -697,4 +835,103 @@ function btnStyle(dk: boolean): React.CSSProperties {
     color: Colors.Text.Neutral.Default,
     fontFamily: "inherit",
   };
+}
+
+/* ── TrendChart — SVG line chart for U7 ── */
+interface TrendPoint { timestamp: number; coverage: number; utilization: number; }
+
+function TrendChart({ data, coverageColor, utilizationColor, dk }: {
+  data: TrendPoint[];
+  coverageColor: string;
+  utilizationColor: string;
+  dk: boolean;
+}) {
+  const W = 500;
+  const H = 200;
+  const PAD = { top: 16, right: 16, bottom: 40, left: 40 };
+  const plotW = W - PAD.left - PAD.right;
+  const plotH = H - PAD.top - PAD.bottom;
+
+  const minT = data[0].timestamp;
+  const maxT = data[data.length - 1].timestamp;
+  const tRange = maxT - minT || 1;
+
+  const toX = (t: number) => PAD.left + ((t - minT) / tRange) * plotW;
+  const toY = (v: number) => PAD.top + plotH - (v / 100) * plotH;
+
+  const covPoints = data.map(d => `${toX(d.timestamp)},${toY(d.coverage)}`).join(" ");
+  const utilPoints = data.map(d => `${toX(d.timestamp)},${toY(d.utilization)}`).join(" ");
+
+  const gridColor = dk ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)";
+  const labelColor = dk ? "#888" : "#999";
+  const gridValues = [0, 25, 50, 75, 100];
+
+  // Pick at most 6 x-axis labels evenly
+  const maxXLabels = Math.min(data.length, 6);
+  const xLabelIndices = data.length <= maxXLabels
+    ? data.map((_, i) => i)
+    : Array.from({ length: maxXLabels }, (_, i) => Math.round(i * (data.length - 1) / (maxXLabels - 1)));
+
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      style={{ width: "100%", height: "100%", display: "block", overflow: "visible" }}
+      aria-label="Trend chart"
+    >
+      {/* Y grid + labels */}
+      {gridValues.map(v => (
+        <g key={v}>
+          <line
+            x1={PAD.left} y1={toY(v)}
+            x2={PAD.left + plotW} y2={toY(v)}
+            stroke={gridColor} strokeWidth={1}
+          />
+          <text x={PAD.left - 6} y={toY(v)} textAnchor="end" dominantBaseline="middle"
+            fontSize={9} fill={labelColor}>{v}</text>
+        </g>
+      ))}
+
+      {/* X axis labels */}
+      {xLabelIndices.map(i => (
+        <text key={i}
+          x={toX(data[i].timestamp)}
+          y={H - PAD.bottom + 14}
+          textAnchor="middle"
+          fontSize={9}
+          fill={labelColor}
+        >
+          {new Date(data[i].timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+        </text>
+      ))}
+
+      {/* Coverage line */}
+      <polyline points={covPoints} fill="none" stroke={coverageColor} strokeWidth={2} />
+
+      {/* Utilization line (dashed) */}
+      <polyline points={utilPoints} fill="none" stroke={utilizationColor} strokeWidth={2} strokeDasharray="5 3" />
+
+      {/* Coverage dots */}
+      {data.map((d, i) => (
+        <circle key={`c${i}`} cx={toX(d.timestamp)} cy={toY(d.coverage)} r={3.5} fill={coverageColor} />
+      ))}
+
+      {/* Utilization dots */}
+      {data.map((d, i) => (
+        <circle key={`u${i}`} cx={toX(d.timestamp)} cy={toY(d.utilization)} r={3} fill={utilizationColor} />
+      ))}
+
+      {/* Score labels on last data point */}
+      {data.length > 0 && (() => {
+        const last = data[data.length - 1];
+        return (
+          <>
+            <text x={toX(last.timestamp) + 6} y={toY(last.coverage)} dominantBaseline="middle"
+              fontSize={10} fontWeight="700" fill={coverageColor}>{last.coverage}%</text>
+            <text x={toX(last.timestamp) + 6} y={toY(last.utilization)} dominantBaseline="middle"
+              fontSize={10} fontWeight="700" fill={utilizationColor}>{last.utilization}%</text>
+          </>
+        );
+      })()}
+    </svg>
+  );
 }
