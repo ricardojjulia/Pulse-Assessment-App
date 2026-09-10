@@ -1,5 +1,5 @@
 {
-  "environmentUrl": "https://yhu28601.apps.dynatrace.com/",
+  "environmentUrl": "https://mjs70956.apps.dynatrace.com/",
   "app": {
     "id": "my.esa.tenant.evaluator",
     "name": "ESA Tenant Evaluator",
