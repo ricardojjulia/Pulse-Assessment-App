@@ -278,6 +278,11 @@ function IdleCapDetail({ cap, dk, text, textSec, textTert, bgSubtle, border, onB
 }
 
 /* ── Left panel — memoized to prevent re-renders during card interactions ── */
+interface SegmentItem {
+  id: string;
+  name: string;
+}
+
 interface IdleLeftPanelProps {
   dk: boolean; text: string; textSec: string; textTert: string;
   accent: string; bgSubtle: string; bgPrimary: string; border: string; borderPri: string;
@@ -296,6 +301,12 @@ interface IdleLeftPanelProps {
   consolidation: Record<string, number>;
   onConsolidationChange: (factors: Record<string, number>) => void;
   excludedCaps: Set<string>;
+  /** Optional filter segments available in the tenant. */
+  segments?: SegmentItem[];
+  /** ID of the currently selected segment, or undefined for all data. */
+  activeSegmentId?: string;
+  /** Called when the user changes the segment selection. */
+  onSegmentChange?: (id: string | undefined) => void;
 }
 
 const IdleLeftPanel = React.memo(function IdleLeftPanel({
@@ -303,6 +314,7 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({
   tenant, start, resume, onEnableProxyMode, totalScore, hasResults, exporting,
   onGeneratePersona, onOpenCustomReport, onOpenSmartReport,
   selectedCount, totalCount, consolidation, onConsolidationChange, excludedCaps,
+  segments, activeSegmentId, onSegmentChange,
 }: IdleLeftPanelProps) {
   const navigate = useNavigate();
   const consolidationRef = useRef<ConsolidationPanelHandle>(null);
@@ -338,6 +350,43 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({
           dk={dk} text={text} textSec={textSec} accent={accent} border={border}
           excludedCaps={excludedCaps}
         />
+
+        {/* Filter Segment selector — only shown when segments exist in this tenant */}
+        {segments && segments.length > 0 && (
+          <Flex flexDirection="column" style={{ width: "100%", maxWidth: 340, marginBottom: 10 }}>
+            <Flex flexDirection="column" style={{ fontSize: 11, fontWeight: 700, color: textSec, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>
+              Filter Segment
+            </Flex>
+            <select
+              value={activeSegmentId ?? ""}
+              onChange={(e) => onSegmentChange?.(e.target.value || undefined)}
+              aria-label="Filter segment"
+              style={{
+                width: "100%",
+                padding: "6px 10px",
+                borderRadius: 6,
+                fontSize: 13,
+                border: `1px solid ${border}`,
+                background: bgSubtle,
+                color: text,
+                outline: "none",
+                cursor: "pointer",
+                appearance: "auto" as React.CSSProperties["appearance"],
+              }}
+            >
+              <option value="">All data (no filter)</option>
+              {segments.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+            {activeSegmentId && (
+              <Flex flexDirection="column" style={{ fontSize: 11, color: accent, marginTop: 4, fontWeight: 600 }}>
+                Segment active — assessment scoped to selected segment
+              </Flex>
+            )}
+          </Flex>
+        )}
+
         <PreflightFlow
           start={start}
           onEnableProxyMode={onEnableProxyMode}
@@ -466,6 +515,13 @@ export interface AssessmentIdleProps {
   collapseKey: number;
   selectedCap: string | null;
   onSelectedCapChange: (cap: string | null) => void;
+  /** Optional filter segments available in the tenant. When non-empty, a
+   *  dropdown appears in the left panel to scope the assessment run. */
+  segments?: SegmentItem[];
+  /** ID of the currently selected segment, or undefined for all data. */
+  activeSegmentId?: string;
+  /** Called when the user changes the segment selection. */
+  onSegmentChange?: (id: string | undefined) => void;
 }
 
 /**
@@ -493,6 +549,9 @@ export const AssessmentIdle: React.FC<AssessmentIdleProps> = ({
   collapseKey,
   selectedCap,
   onSelectedCapChange,
+  segments,
+  activeSegmentId,
+  onSegmentChange,
 }) => {
   const dk = useCurrentTheme() === "dark";
 
@@ -526,6 +585,9 @@ export const AssessmentIdle: React.FC<AssessmentIdleProps> = ({
         consolidation={consolidation}
         onConsolidationChange={onConsolidationChange}
         excludedCaps={excludedCaps}
+        segments={segments}
+        activeSegmentId={activeSegmentId}
+        onSegmentChange={onSegmentChange}
       />
 
       {/* Right panel — capability cards */}

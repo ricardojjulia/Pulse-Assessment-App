@@ -19,6 +19,7 @@ import { useDegradationAlert } from "../hooks/useDegradationAlert";
 import { type CovUtilRadarHandle } from "../components/CovUtilRadar";
 import { AssessmentResults } from "../components/AssessmentResults";
 import { AssessmentIdle } from "../components/AssessmentIdle";
+import { useSegments } from "../hooks/useSegments";
 
 function formatRecords(n: number): string {
   return n.toLocaleString();
@@ -62,6 +63,9 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
   const [showCustomReport, setShowCustomReport] = useState(false);
   const [showSmartReport, setShowSmartReport] = useState(false);
 
+  const { segments } = useSegments();
+  const [activeSegmentId, setActiveSegmentId] = useState<string | undefined>(undefined);
+
   const davisHandle = useDavisRecommendations(capabilities, { enabled: true });
   const adoption = useAppAdoption(capabilities.length > 0);
 
@@ -101,12 +105,18 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
       ? CAPABILITIES
       : CAPABILITIES.filter(c => !excludedCaps.has(c.name));
     if (!proxy) {
-      start(excludedCaps.size === 0 ? undefined : (selected.length > 0 ? selected : undefined));
+      start(
+        excludedCaps.size === 0 ? undefined : (selected.length > 0 ? selected : undefined),
+        activeSegmentId,
+      );
       return;
     }
     const { caps } = applyTraceProxyMode(selected.length > 0 ? selected : CAPABILITIES);
-    start(caps.length > 0 ? caps : applyTraceProxyMode(CAPABILITIES).caps);
-  }, [start, excludedCaps, traceProxyMode]);
+    start(
+      caps.length > 0 ? caps : applyTraceProxyMode(CAPABILITIES).caps,
+      activeSegmentId,
+    );
+  }, [start, excludedCaps, traceProxyMode, activeSegmentId]);
 
   const traceProxyInfo = useMemo(() => {
     if (!traceProxyMode) return null;
@@ -294,6 +304,9 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
           collapseKey={collapseKey}
           selectedCap={selectedCap}
           onSelectedCapChange={setSelectedCap}
+          segments={segments}
+          activeSegmentId={activeSegmentId}
+          onSegmentChange={setActiveSegmentId}
         />
       )}
 
