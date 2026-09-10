@@ -172,7 +172,12 @@ export const CustomReportModal: React.FC<CustomReportModalProps> = ({ open, onCl
         </Flex>
 
         {/* Manual footer row — Strato Modal has no Modal.Footer */}
-        <Flex justifyContent="flex-end" gap={8} style={{ marginTop: 4 }}>
+        <Flex justifyContent="flex-end" alignItems="center" gap={8} style={{ marginTop: 4 }}>
+          {selectedCount === 0 && (
+            <Text style={{ fontSize: 12, color: Colors.Text.Critical.Default, flex: 1 }}>
+              Select at least one section
+            </Text>
+          )}
           <Button onClick={onClose}>Cancel</Button>
           <Button
             variant="emphasized" color="primary"

@@ -21,6 +21,19 @@ const AiInsightsPage = React.lazy(() =>
   import("./pages/AiInsightsPage").then(m => ({ default: m.AiInsightsPage }))
 );
 
+const LoadingFallback = () => (
+  <Flex flexDirection="column" gap={16} style={{ padding: 32 }}>
+    <Skeleton height={48} width="30%" />
+    <Flex gap={16}>
+      <Skeleton height={300} width="50%" />
+      <Flex flexDirection="column" gap={8} style={{ flex: 1 }}>
+        <SkeletonText lines={3} />
+        <Skeleton height={120} />
+      </Flex>
+    </Flex>
+  </Flex>
+);
+
 export const App = () => {
   const history = useAssessmentHistory();
   // Live host-count detection drives the Scale Tier choice. See
@@ -41,25 +54,36 @@ export const App = () => {
     <ErrorBoundary>
       <Page>
         <Page.Main>
-          <Suspense fallback={
-            <Flex flexDirection="column" gap={16} style={{ padding: 32 }}>
-              <Skeleton height={48} width="30%" />
-              <Flex gap={16}>
-                <Skeleton height={300} width="50%" />
-                <Flex flexDirection="column" gap={8} style={{ flex: 1 }}>
-                  <SkeletonText lines={3} />
-                  <Skeleton height={120} />
-                </Flex>
-              </Flex>
-            </Flex>
-          }>
             <Routes>
-              <Route path="/" element={<CoverageAssessment history={history} coverageData={coverageData} scale={scale} />} />
-              <Route path="/compare" element={<ComparisonPage snapshots={history.snapshots} saveSnapshot={history.saveSnapshot} />} />
-              <Route path="/ai-insights" element={<AiInsightsPage coverageData={coverageData} scale={scale} />} />
-              <Route path="/tenant-review/*" element={<TenantReviewApp coverageData={coverageData} snapshots={history.snapshots} />} />
+              <Route path="/" element={
+                <ErrorBoundary>
+                  <Suspense fallback={<LoadingFallback />}>
+                    <CoverageAssessment history={history} coverageData={coverageData} scale={scale} />
+                  </Suspense>
+                </ErrorBoundary>
+              } />
+              <Route path="/compare" element={
+                <ErrorBoundary>
+                  <Suspense fallback={<LoadingFallback />}>
+                    <ComparisonPage snapshots={history.snapshots} saveSnapshot={history.saveSnapshot} />
+                  </Suspense>
+                </ErrorBoundary>
+              } />
+              <Route path="/ai-insights" element={
+                <ErrorBoundary>
+                  <Suspense fallback={<LoadingFallback />}>
+                    <AiInsightsPage coverageData={coverageData} scale={scale} />
+                  </Suspense>
+                </ErrorBoundary>
+              } />
+              <Route path="/tenant-review/*" element={
+                <ErrorBoundary>
+                  <Suspense fallback={<LoadingFallback />}>
+                    <TenantReviewApp coverageData={coverageData} snapshots={history.snapshots} />
+                  </Suspense>
+                </ErrorBoundary>
+              } />
             </Routes>
-          </Suspense>
         </Page.Main>
       </Page>
     </ErrorBoundary>
