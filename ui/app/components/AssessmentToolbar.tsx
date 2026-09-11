@@ -172,10 +172,10 @@ export const AssessmentToolbar: React.FC<AssessmentToolbarProps> = ({
           )}
         </Button>
         <Button onClick={() => navigate("/tenant-review")} size="condensed">
-          Tenant Review
+          DT Inventory
         </Button>
         <Button onClick={() => navigate("/observability")} size="condensed">
-          Observability Eval
+          DT Observability Evaluation
         </Button>
         {/* Reports — persona PDFs (Executive / Tactical / Technical)
             and the Custom builder are client-side jsPDF and ship to
