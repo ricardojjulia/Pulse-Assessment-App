@@ -10,6 +10,7 @@ import { useObservabilityFullEval } from "../observabilityEval/useObservabilityF
 import { FindingsTable } from "../tenantReview/components/shared/FindingsTable";
 import { useSegments } from "../hooks/useSegments";
 import { generateObservabilityEvalPdf } from "../reports/observabilityEvalPdf";
+import { APP_VERSION } from "../appVersion";
 import type { EstimateResult, ObsFullEvalResults, ObsDomainResult, ObsGrade, RoadmapItem } from "../observabilityEval/types";
 import type { Finding } from "../tenantReview/types/review.types";
 
@@ -571,7 +572,7 @@ export const ObservabilityEvaluationPage: React.FC = () => {
                 generateObservabilityEvalPdf(handle.results, {
                   tenant: window.location.hostname,
                   date: new Date().toISOString().slice(0, 10),
-                  appVersion: "2.7.2",
+                  appVersion: APP_VERSION,
                 });
               }}
             >
