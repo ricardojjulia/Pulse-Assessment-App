@@ -9,6 +9,7 @@ import { ConsolidationPanel, type ConsolidationPanelHandle } from "./Consolidati
 import { MiniSparkline } from "./MiniSparkline";
 import { Tooltip } from "./Tooltip";
 import { PreflightFlow } from "./PreflightFlow";
+import { A11yToggle } from "./A11yToggle";
 import { ReportActions } from "./ReportActions";
 import { CAPABILITIES } from "../queries";
 import { CAP_SUMMARIES } from "../data/capSummaries";
@@ -491,7 +492,10 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({
             </Text>
           </Flex>
         )}
-        <Text style={{ marginTop: 16, fontSize: 11, color: textTert }}>v{APP_VERSION}</Text>
+        <Flex justifyContent="space-between" alignItems="center" style={{ marginTop: 16, width: "100%" }}>
+          <Text style={{ fontSize: 11, color: textTert }}>v{APP_VERSION}</Text>
+          <A11yToggle />
+        </Flex>
       </Flex>
     </Flex>
   );
