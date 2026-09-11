@@ -44,3 +44,7 @@ Thumbs.db
 # opposite of this repo's rule. Kept local; the committed copy lives in the
 # field-asset-library submission, not here.
 meta.yaml
+
+# Claude Code agent worktrees and temp files
+.claude/worktrees/
+.claude/settings.local.json.tmp.*
