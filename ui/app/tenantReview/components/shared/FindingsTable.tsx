@@ -76,10 +76,25 @@ const FindingCard: React.FC<{ finding: Finding }> = ({ finding }) => {
         <Text style={{ fontSize: "13px", opacity: 0.8 }}>
           {finding.description}
         </Text>
+        {finding.detail && (
+          <Text style={{ fontSize: "12px", opacity: 0.55, fontFamily: "monospace" }}>
+            {finding.detail}
+          </Text>
+        )}
         {finding.recommendation && (
           <Text style={{ fontSize: "12px", opacity: 0.65, fontStyle: "italic" }}>
             {finding.recommendation}
           </Text>
+        )}
+        {finding.actionUrl && (
+          <a
+            href={finding.actionUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ fontSize: "12px", color: config.color, marginTop: 2 }}
+          >
+            Open in Dynatrace →
+          </a>
         )}
       </Flex>
     </Flex>
