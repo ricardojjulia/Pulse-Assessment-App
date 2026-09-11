@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCurrentTheme } from "@dynatrace/strato-components/core";
 import Colors from "@dynatrace/strato-design-tokens/colors";
@@ -7,6 +7,8 @@ import { Flex } from "@dynatrace/strato-components/layouts";
 import { Text, Strong } from "@dynatrace/strato-components/typography";
 import { ProgressBar } from "@dynatrace/strato-components/content";
 import { useObservabilityFullEval } from "../observabilityEval/useObservabilityFullEval";
+import { useObsEvalHistory } from "../observabilityEval/useObsEvalHistory";
+import type { ObsEvalSnapshot } from "../observabilityEval/useObsEvalHistory";
 import { FindingsTable } from "../tenantReview/components/shared/FindingsTable";
 import { useSegments } from "../hooks/useSegments";
 import { generateObservabilityEvalPdf } from "../reports/observabilityEvalPdf";
@@ -405,6 +407,146 @@ const ResultsFooter: React.FC<{ results: ObsFullEvalResults; textSec: string }> 
   </Text>
 );
 
+// ─── Score trend sparkline ────────────────────────────────────────────────────
+
+const GRADE_THRESHOLDS = [
+  { score: 90, label: "A", color: "#14b850" },
+  { score: 80, label: "B", color: "#14b8a6" },
+  { score: 65, label: "C", color: "#f5c400" },
+  { score: 50, label: "D", color: "#dc7820" },
+];
+
+interface ScoreTrendProps { snapshots: ObsEvalSnapshot[]; dk: boolean; }
+
+const ScoreTrend: React.FC<ScoreTrendProps> = ({ snapshots, dk }) => {
+  const text = Colors.Text.Neutral.Default;
+  const textSec = Colors.Text.Neutral.Subdued;
+  const borderColor = Colors.Border.Neutral.Default;
+
+  // Show newest-last so the line reads left-to-right chronologically
+  const pts = [...snapshots].reverse().slice(-15);
+  if (pts.length < 1) return null;
+
+  const W = 560, H = 100, PAD_L = 32, PAD_R = 16, PAD_T = 10, PAD_B = 24;
+  const IW = W - PAD_L - PAD_R;
+  const IH = H - PAD_T - PAD_B;
+
+  const xOf = (i: number) => PAD_L + (pts.length === 1 ? IW / 2 : (i / (pts.length - 1)) * IW);
+  const yOf = (score: number) => PAD_T + IH - (score / 100) * IH;
+
+  const polyline = pts.map((s, i) => `${xOf(i).toFixed(1)},${yOf(s.overallScore).toFixed(1)}`).join(" ");
+
+  // Delta vs previous run (newest to second-newest)
+  const latest = snapshots[0];
+  const prev = snapshots[1];
+  const delta = prev ? latest.overallScore - prev.overallScore : null;
+  const deltaColor = delta === null ? textSec : delta > 0 ? "#14b850" : delta < 0 ? Colors.Text.Critical.Default : textSec;
+  const deltaLabel = delta === null ? "" : delta > 0 ? `▲ ${delta}` : delta < 0 ? `▼ ${Math.abs(delta)}` : "━ 0";
+
+  // Domain deltas (only when we have 2+ runs)
+  const domainDeltas = prev
+    ? latest.domains.map(d => {
+        const p = prev.domains.find(x => x.id === d.id);
+        return { ...d, delta: p ? d.score - p.score : null };
+      })
+    : [];
+
+  return (
+    <Card>
+      <Flex justifyContent="space-between" alignItems="center">
+        <Text style={{ fontSize: 13, fontWeight: 700, color: text }}>Score Trend</Text>
+        <Flex gap={8} alignItems="center">
+          {delta !== null && (
+            <Text style={{ fontSize: 13, fontWeight: 700, color: deltaColor }}>{deltaLabel}</Text>
+          )}
+          <Text style={{ fontSize: 12, color: textSec }}>{pts.length} run{pts.length !== 1 ? "s" : ""}</Text>
+        </Flex>
+      </Flex>
+
+      {/* SVG sparkline */}
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ maxWidth: W, display: "block" }}>
+        {/* Reference lines */}
+        {GRADE_THRESHOLDS.map(t => {
+          const ry = yOf(t.score);
+          return (
+            <g key={t.label}>
+              <line x1={PAD_L} y1={ry} x2={W - PAD_R} y2={ry}
+                stroke={t.color} strokeWidth={0.5} strokeDasharray="3 3" opacity={0.4} />
+              <text x={PAD_L - 4} y={ry + 3.5} fontSize={7} fill={t.color} textAnchor="end" opacity={0.7}>{t.label}</text>
+            </g>
+          );
+        })}
+        {/* Area fill */}
+        <polyline
+          points={[
+            `${xOf(0).toFixed(1)},${(PAD_T + IH).toFixed(1)}`,
+            polyline,
+            `${xOf(pts.length - 1).toFixed(1)},${(PAD_T + IH).toFixed(1)}`,
+          ].join(" ")}
+          fill={dk ? "rgba(20,100,255,0.08)" : "rgba(20,100,255,0.05)"}
+          stroke="none"
+        />
+        {/* Line */}
+        <polyline points={polyline} fill="none" stroke="#1464ff" strokeWidth={1.5} strokeLinejoin="round" />
+        {/* Dots */}
+        {pts.map((s, i) => {
+          const gc = gradeColor(s.overallGrade);
+          return (
+            <g key={s.id}>
+              <circle cx={xOf(i)} cy={yOf(s.overallScore)} r={4} fill={gc} />
+              <text x={xOf(i)} y={PAD_T + IH + 14} fontSize={7}
+                fill={dk ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.35)"}
+                textAnchor="middle">
+                {s.timestamp.slice(5, 10)}
+              </text>
+            </g>
+          );
+        })}
+        {/* Score label on latest point */}
+        {(() => {
+          const last = pts[pts.length - 1];
+          const lx = xOf(pts.length - 1);
+          const ly = yOf(last.overallScore);
+          const gc = gradeColor(last.overallGrade);
+          return (
+            <text x={lx} y={ly - 7} fontSize={8} fill={gc} textAnchor="middle" fontWeight="bold">
+              {last.overallScore}
+            </text>
+          );
+        })()}
+      </svg>
+
+      {/* Domain delta table (only when 2+ runs) */}
+      {domainDeltas.length > 0 && (
+        <Flex flexWrap="wrap" gap={6} style={{ marginTop: 4 }}>
+          {domainDeltas.map(d => {
+            const dc = d.delta === null ? textSec : d.delta > 0 ? "#14b850" : d.delta < 0 ? Colors.Text.Critical.Default : textSec;
+            const dl = d.delta === null ? "" : d.delta > 0 ? `+${d.delta}` : d.delta < 0 ? `${d.delta}` : "=";
+            const cat = DOMAIN_CATALOG.find(x => x.id === d.id);
+            return (
+              <Flex
+                key={d.id}
+                alignItems="center"
+                gap={4}
+                style={{
+                  padding: "3px 8px",
+                  borderRadius: 6,
+                  background: dk ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+                  border: `1px solid ${borderColor}`,
+                }}
+              >
+                <Text style={{ fontSize: 11, color: textSec }}>{cat?.icon ?? ""} {d.name}</Text>
+                <Text style={{ fontSize: 11, fontWeight: 700, color: gradeColor(d.grade) }}>{d.grade}</Text>
+                {dl && <Text style={{ fontSize: 10, color: dc }}>{dl}</Text>}
+              </Flex>
+            );
+          })}
+        </Flex>
+      )}
+    </Card>
+  );
+};
+
 // ─── Running progress grid ────────────────────────────────────────────────────
 
 interface RunningGridProps {
@@ -510,8 +652,10 @@ export const ObservabilityEvaluationPage: React.FC = () => {
   const dk = useCurrentTheme() === "dark";
   const handle = useObservabilityFullEval();
   const { segments } = useSegments();
+  const { snapshots, saveSnapshot } = useObsEvalHistory();
   const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
   const [activeSegmentId, setActiveSegmentId] = useState<string | undefined>(undefined);
+  const savedRef = useRef(false);
 
   const text = Colors.Text.Neutral.Default;
   const textSec = Colors.Text.Neutral.Subdued;
@@ -529,6 +673,25 @@ export const ObservabilityEvaluationPage: React.FC = () => {
 
   const selectedDomain = handle.results?.domains.find(d => d.id === selectedDomainId) ?? null;
 
+  // Auto-save snapshot when eval completes (once per run)
+  useEffect(() => {
+    if (handle.phase !== "done" || !handle.results) return;
+    if (savedRef.current) return;
+    savedRef.current = true;
+    saveSnapshot({
+      tenant: window.location.hostname,
+      overallScore: handle.results.overallScore,
+      overallGrade: handle.results.overallGrade,
+      segmentId: activeSegmentId,
+      domains: handle.results.domains.map(d => ({ id: d.id, name: d.name, score: d.score, grade: d.grade })),
+    });
+  }, [handle.phase, handle.results, activeSegmentId, saveSnapshot]);
+
+  // Reset the saved guard when user starts a new run
+  useEffect(() => {
+    if (handle.phase === "idle") savedRef.current = false;
+  }, [handle.phase]);
+
   return (
     <Flex flexDirection="column" gap={20} style={{ padding: "16px 24px", maxWidth: 960, margin: "0 auto" }}>
 
@@ -537,6 +700,11 @@ export const ObservabilityEvaluationPage: React.FC = () => {
         <Button onClick={() => navigate("/")} size="condensed">← Back to Assessment</Button>
         <Text style={{ fontSize: 20, fontWeight: 800, color: text }}>Observability Evaluation</Text>
       </Flex>
+
+      {/* Score trend — visible on idle and done when history exists */}
+      {(handle.phase === "idle" || handle.phase === "done") && snapshots.length > 0 && (
+        <ScoreTrend snapshots={snapshots} dk={dk} />
+      )}
 
       {/* IDLE */}
       {handle.phase === "idle" && (
