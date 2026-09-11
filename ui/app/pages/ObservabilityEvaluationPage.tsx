@@ -14,6 +14,21 @@ import { APP_VERSION } from "../appVersion";
 import type { EstimateResult, ObsFullEvalResults, ObsDomainResult, ObsGrade, RoadmapItem } from "../observabilityEval/types";
 import type { Finding } from "../tenantReview/types/review.types";
 
+// ─── Domain catalog (order matches Promise.all in the hook) ───────────────────
+
+const DOMAIN_CATALOG: Array<{ id: string; name: string; icon: string }> = [
+  { id: "oneagent",   name: "OneAgent",       icon: "🖥" },
+  { id: "infra",      name: "Infrastructure", icon: "🏗" },
+  { id: "apm",        name: "APM",            icon: "📈" },
+  { id: "logs",       name: "Logs",           icon: "📋" },
+  { id: "dem",        name: "DEM / RUM",      icon: "🌐" },
+  { id: "davis",      name: "Davis AI",       icon: "🤖" },
+  { id: "automation", name: "Automation",     icon: "⚙" },
+  { id: "governance", name: "Governance",     icon: "🔒" },
+  { id: "bizobs",     name: "Business Obs",   icon: "💼" },
+  { id: "extensions", name: "Extensions",     icon: "🔌" },
+];
+
 // ─── Formatting helpers ────────────────────────────────────────────────────────
 
 function formatNum(n: number): string { return n.toLocaleString(); }
@@ -390,6 +405,104 @@ const ResultsFooter: React.FC<{ results: ObsFullEvalResults; textSec: string }> 
   </Text>
 );
 
+// ─── Running progress grid ────────────────────────────────────────────────────
+
+interface RunningGridProps {
+  domainProgress: ObsDomainResult[];
+  totalDomains: number;
+  dk: boolean;
+}
+
+const RunningGrid: React.FC<RunningGridProps> = ({ domainProgress, totalDomains, dk }) => {
+  const textSec = Colors.Text.Neutral.Subdued;
+  const doneById = Object.fromEntries(domainProgress.map(d => [d.id, d]));
+  const done = domainProgress.length;
+
+  return (
+    <Flex flexDirection="column" gap={16} style={{ maxWidth: 640 }}>
+      <Flex flexDirection="column" gap={6}>
+        <Flex justifyContent="space-between" alignItems="center">
+          <Text style={{ fontSize: 14, fontWeight: 700, color: Colors.Text.Neutral.Default }}>
+            Running evaluation…
+          </Text>
+          <Text style={{ fontSize: 13, color: textSec }}>
+            {done} / {totalDomains} domains complete
+          </Text>
+        </Flex>
+        <ProgressBar value={(done / totalDomains) * 100} />
+      </Flex>
+
+      <Flex flexWrap="wrap" gap={8}>
+        {DOMAIN_CATALOG.map(meta => {
+          const completed = doneById[meta.id];
+          if (completed) {
+            const gc = gradeColor(completed.grade);
+            const gb = gradeBg(completed.grade, dk);
+            return (
+              <Flex
+                key={meta.id}
+                flexDirection="column"
+                alignItems="center"
+                gap={4}
+                style={{
+                  padding: "10px 14px",
+                  borderRadius: 10,
+                  background: gb,
+                  border: `2px solid ${gc}`,
+                  minWidth: 108,
+                  flex: "1 1 108px",
+                  maxWidth: 160,
+                }}
+              >
+                <Text style={{ fontSize: 18, lineHeight: 1 }}>{meta.icon}</Text>
+                <Text style={{ fontSize: 20, fontWeight: 900, color: gc, lineHeight: 1 }}>{completed.grade}</Text>
+                <Text style={{ fontSize: 11, color: gc, fontWeight: 600 }}>{completed.score}/100</Text>
+                <Text style={{ fontSize: 10, color: Colors.Text.Neutral.Subdued, textAlign: "center", lineHeight: 1.3 }}>{meta.name}</Text>
+              </Flex>
+            );
+          }
+          // Pending tile — pulsing placeholder
+          return (
+            <Flex
+              key={meta.id}
+              flexDirection="column"
+              alignItems="center"
+              gap={4}
+              style={{
+                padding: "10px 14px",
+                borderRadius: 10,
+                background: dk ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.03)",
+                border: `2px solid ${Colors.Border.Neutral.Default}`,
+                minWidth: 108,
+                flex: "1 1 108px",
+                maxWidth: 160,
+                opacity: 0.55,
+                animation: "pulse 1.6s ease-in-out infinite",
+              }}
+            >
+              <Text style={{ fontSize: 18, lineHeight: 1 }}>{meta.icon}</Text>
+              <Text style={{ fontSize: 20, fontWeight: 900, color: textSec, lineHeight: 1 }}>—</Text>
+              <Text style={{ fontSize: 11, color: textSec }}>&nbsp;</Text>
+              <Text style={{ fontSize: 10, color: textSec, textAlign: "center", lineHeight: 1.3 }}>{meta.name}</Text>
+            </Flex>
+          );
+        })}
+      </Flex>
+
+      <Text style={{ fontSize: 12, color: textSec, fontStyle: "italic" }}>
+        All probes are read-only. Domains run in parallel — typically 20–60 seconds total.
+      </Text>
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 0.55; }
+          50%       { opacity: 0.25; }
+        }
+      `}</style>
+    </Flex>
+  );
+};
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export const ObservabilityEvaluationPage: React.FC = () => {
@@ -494,13 +607,11 @@ export const ObservabilityEvaluationPage: React.FC = () => {
 
       {/* RUNNING */}
       {handle.phase === "running" && (
-        <Flex flexDirection="column" gap={16} alignItems="flex-start">
-          <ProgressBar value={-1} />
-          <Text style={{ fontSize: 14, color: textSec }}>Running 10 domain evaluations (46 probes)…</Text>
-          <Text style={{ fontSize: 12, color: textSec }}>
-            This typically takes 20–60 seconds depending on tenant data volume.
-          </Text>
-        </Flex>
+        <RunningGrid
+          domainProgress={handle.domainProgress}
+          totalDomains={handle.totalDomains}
+          dk={dk}
+        />
       )}
 
       {/* DONE */}

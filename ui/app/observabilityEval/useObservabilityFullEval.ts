@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from "react";
 import { queryExecutionClient } from "@dynatrace-sdk/client-query";
-import type { EstimateResult, ObsFullEvalResults, RoadmapItem } from "./types";
+import type { EstimateResult, ObsFullEvalResults, ObsDomainResult, RoadmapItem } from "./types";
 import { scoreToGrade } from "./types";
 import type { Finding, FindingSeverity } from "../tenantReview/types/review.types";
 import { runOneAgentDomain } from "./domains/oneagent";
@@ -20,6 +20,8 @@ export interface FullEvalHandle {
   phase: FullEvalPhase;
   estimate: EstimateResult | null;
   results: ObsFullEvalResults | null;
+  domainProgress: ObsFullEvalResults["domains"];
+  totalDomains: number;
   error: string | null;
   startEstimate: (segmentId?: string) => void;
   confirm: () => void;
@@ -65,28 +67,37 @@ function buildRoadmap(findings: Finding[], domains: ObsFullEvalResults["domains"
   });
 }
 
+const TOTAL_DOMAINS = 10;
+
 export function useObservabilityFullEval(): FullEvalHandle {
   const [phase, setPhase] = useState<FullEvalPhase>("idle");
   const [estimate, setEstimate] = useState<EstimateResult | null>(null);
   const [results, setResults] = useState<ObsFullEvalResults | null>(null);
+  const [domainProgress, setDomainProgress] = useState<ObsDomainResult[]>([]);
   const [error, setError] = useState<string | null>(null);
   const segmentIdRef = useRef<string | undefined>(undefined);
   const cancelledRef = useRef(false);
+  // Accumulate completed domains without triggering re-render on every push
+  const completedRef = useRef<ObsDomainResult[]>([]);
 
   const reset = useCallback(() => {
     cancelledRef.current = true;
+    completedRef.current = [];
     setPhase("idle");
     setEstimate(null);
     setResults(null);
+    setDomainProgress([]);
     setError(null);
     segmentIdRef.current = undefined;
   }, []);
 
   const cancel = useCallback(() => {
     cancelledRef.current = true;
+    completedRef.current = [];
     setPhase("idle");
     setEstimate(null);
     setResults(null);
+    setDomainProgress([]);
     setError(null);
   }, []);
 
@@ -120,41 +131,47 @@ export function useObservabilityFullEval(): FullEvalHandle {
   const confirm = useCallback(() => {
     if (phase !== "confirmed") return;
     cancelledRef.current = false;
+    completedRef.current = [];
+    setDomainProgress([]);
     setPhase("running");
 
     const segId = segmentIdRef.current ?? "";
 
+    // Wrap each domain promise so it streams results as each finishes
+    const wrap = (p: Promise<ObsDomainResult>): Promise<ObsDomainResult> =>
+      p.then(domain => {
+        if (cancelledRef.current) return domain;
+        completedRef.current = [...completedRef.current, domain];
+        setDomainProgress([...completedRef.current]);
+        return domain;
+      });
+
     Promise.all([
-      runOneAgentDomain(),
-      runInfraDomain(segId),
-      runApmDomain(segId),
-      runLogsDomain(segId),
-      runDemDomain(),
-      runDavisDomain(),
-      runAutomationDomain(),
-      runGovernanceDomain(),
-      runBizObsDomain(),
-      runExtensionsDomain(),
-    ]).then((domains) => {
+      wrap(runOneAgentDomain()),
+      wrap(runInfraDomain(segId)),
+      wrap(runApmDomain(segId)),
+      wrap(runLogsDomain(segId)),
+      wrap(runDemDomain()),
+      wrap(runDavisDomain()),
+      wrap(runAutomationDomain()),
+      wrap(runGovernanceDomain()),
+      wrap(runBizObsDomain()),
+      wrap(runExtensionsDomain()),
+    ]).then((domains: ObsDomainResult[]) => {
       if (cancelledRef.current) return;
 
-      // Weighted overall score
-      const totalWeight = domains.reduce((s, d) => s + (DOMAIN_WEIGHTS[d.id] ?? 1), 0);
-      const weightedSum = domains.reduce((s, d) => s + d.score * (DOMAIN_WEIGHTS[d.id] ?? 1), 0);
+      const totalWeight = domains.reduce((s: number, d: ObsDomainResult) => s + (DOMAIN_WEIGHTS[d.id] ?? 1), 0);
+      const weightedSum = domains.reduce((s: number, d: ObsDomainResult) => s + d.score * (DOMAIN_WEIGHTS[d.id] ?? 1), 0);
       const overallScore = Math.round(weightedSum / totalWeight);
       const overallGrade = scoreToGrade(overallScore);
 
-      // Flatten and sort all findings: critical → warning → info → success
-      const allFindings: Finding[] = domains
-        .flatMap(d => d.findings)
-        .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
+      const allFindings: Finding[] = (domains as ObsDomainResult[])
+        .flatMap((d: ObsDomainResult) => d.findings)
+        .sort((a: Finding, b: Finding) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
 
       const roadmap = buildRoadmap(allFindings, domains);
 
-      const scannedBytes = 0;
-      const scannedRecords = 0;
-
-      setResults({ domains, overallScore, overallGrade, findings: allFindings, roadmap, scannedBytes, scannedRecords });
+      setResults({ domains, overallScore, overallGrade, findings: allFindings, roadmap, scannedBytes: 0, scannedRecords: 0 });
       setPhase("done");
     }).catch((err: unknown) => {
       if (cancelledRef.current) return;
@@ -163,5 +180,5 @@ export function useObservabilityFullEval(): FullEvalHandle {
     });
   }, [phase]);
 
-  return { phase, estimate, results, error, startEstimate, confirm, cancel, reset };
+  return { phase, estimate, results, domainProgress, totalDomains: TOTAL_DOMAINS, error, startEstimate, confirm, cancel, reset };
 }
