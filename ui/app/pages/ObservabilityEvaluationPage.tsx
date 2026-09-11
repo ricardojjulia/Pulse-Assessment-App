@@ -8,6 +8,7 @@ import { Text, Strong } from "@dynatrace/strato-components/typography";
 import { ProgressBar } from "@dynatrace/strato-components/content";
 import { useObservabilityFullEval } from "../observabilityEval/useObservabilityFullEval";
 import { useObsEvalHistory } from "../observabilityEval/useObsEvalHistory";
+import { evaluateGaps } from "../observabilityEval/gapInsights";
 import type { ObsEvalSnapshot } from "../observabilityEval/useObsEvalHistory";
 import { FindingsTable } from "../tenantReview/components/shared/FindingsTable";
 import { useSegments } from "../hooks/useSegments";
@@ -406,6 +407,99 @@ const ResultsFooter: React.FC<{ results: ObsFullEvalResults; textSec: string }> 
     {results.domains.length} domains · {results.domains.reduce((s, d) => s + d.probes.length, 0)} probes · {results.findings.length} finding{results.findings.length !== 1 ? "s" : ""} generated
   </Text>
 );
+
+// ─── Gap insights card ────────────────────────────────────────────────────────
+
+interface GapInsightsCardProps { findings: Finding[]; dk: boolean; }
+
+const GapInsightsCard: React.FC<GapInsightsCardProps> = ({ findings, dk }) => {
+  const text = Colors.Text.Neutral.Default;
+  const textSec = Colors.Text.Neutral.Subdued;
+  const borderColor = Colors.Border.Neutral.Default;
+  const [expanded, setExpanded] = useState(true);
+
+  if (findings.length === 0) return null;
+
+  const warnings = findings.filter(f => f.severity === "warning").length;
+  const infos    = findings.filter(f => f.severity === "info").length;
+
+  return (
+    <Card>
+      {/* Header */}
+      <Flex
+        justifyContent="space-between"
+        alignItems="center"
+        role="button"
+        tabIndex={0}
+        onClick={() => setExpanded(p => !p)}
+        onKeyDown={(e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpanded(p => !p); } }}
+        style={{ cursor: "pointer" }}
+      >
+        <Flex alignItems="center" gap={12}>
+          <Text style={{ fontSize: 14, fontWeight: 800, color: text }}>Gap Insights</Text>
+          <Text style={{ fontSize: 12, color: textSec }}>
+            Cross-domain coverage gaps — we saw strength here, but you're not covering this
+          </Text>
+        </Flex>
+        <Flex alignItems="center" gap={8}>
+          {warnings > 0 && (
+            <Text style={{ fontSize: 12, fontWeight: 700, color: Colors.Charts.Status.Warning.Default }}>
+              {warnings} gaps
+            </Text>
+          )}
+          {infos > 0 && (
+            <Text style={{ fontSize: 12, color: textSec }}>{infos} opportunities</Text>
+          )}
+          <Text style={{ fontSize: 11, color: textSec, opacity: 0.7 }}>{expanded ? "▲" : "▼"}</Text>
+        </Flex>
+      </Flex>
+
+      {expanded && (
+        <Flex flexDirection="column" gap={8} style={{ marginTop: 4 }}>
+          {findings.map(f => {
+            const sColor = f.severity === "warning" ? Colors.Charts.Status.Warning.Default
+              : f.severity === "critical" ? Colors.Text.Critical.Default
+              : Colors.Text.Primary.Default;
+            return (
+              <Flex
+                key={f.id}
+                flexDirection="column"
+                gap={4}
+                style={{
+                  padding: "12px 16px",
+                  borderRadius: 8,
+                  background: f.severity === "warning"
+                    ? "rgba(255,193,7,0.06)"
+                    : dk ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)",
+                  borderLeft: `4px solid ${sColor}`,
+                  border: `1px solid ${borderColor}`,
+                  borderLeftWidth: 4,
+                  borderLeftColor: sColor,
+                }}
+              >
+                <Flex alignItems="center" gap={8}>
+                  <Text style={{ fontSize: 10, fontWeight: 800, color: sColor, textTransform: "uppercase", letterSpacing: 0.5, flexShrink: 0 }}>
+                    {f.severity === "warning" ? "Gap" : "Opportunity"}
+                  </Text>
+                  <Text style={{ fontSize: 13, fontWeight: 700, color: text }}>{f.title}</Text>
+                </Flex>
+                <Text style={{ fontSize: 12, color: textSec, lineHeight: 1.6 }}>{f.description}</Text>
+                {f.detail && (
+                  <Text style={{ fontSize: 11, color: textSec, opacity: 0.65, fontFamily: "monospace" }}>{f.detail}</Text>
+                )}
+                {f.recommendation && (
+                  <Text style={{ fontSize: 12, color: Colors.Text.Primary.Default, fontStyle: "italic", marginTop: 2 }}>
+                    → {f.recommendation}
+                  </Text>
+                )}
+              </Flex>
+            );
+          })}
+        </Flex>
+      )}
+    </Card>
+  );
+};
 
 // ─── Score trend sparkline ────────────────────────────────────────────────────
 
@@ -817,6 +911,9 @@ export const ObservabilityEvaluationPage: React.FC = () => {
               </Text>
             )}
           </Card>
+
+          {/* Gap Insights */}
+          <GapInsightsCard findings={evaluateGaps(handle.results)} dk={dk} />
 
           {/* Findings */}
           {handle.results.findings.length > 0 && (

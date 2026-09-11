@@ -2,6 +2,7 @@ import { jsPDF } from "jspdf";
 import { NOTO_SANS_BASE64, FONT_AVAILABLE } from "./fonts/notoSansSubset";
 import type { ObsFullEvalResults, ObsDomainResult, ObsGrade } from "../observabilityEval/types";
 import type { Finding, FindingSeverity } from "../tenantReview/types/review.types";
+import { evaluateGaps } from "../observabilityEval/gapInsights";
 
 // ── Font registration (same pattern as aiNarrativePdf.ts) ─────────────────────
 
@@ -443,7 +444,59 @@ export function buildObsEvalPdf(results: ObsFullEvalResults, meta: ObsEvalPdfMet
   y += 6;
 
   // ══════════════════════════════════════════════════════════════════════════════
-  // SECTION 2 — Findings
+  // SECTION 2 — Gap Insights (cross-domain correlation)
+  // ══════════════════════════════════════════════════════════════════════════════
+
+  const gapFindings = evaluateGaps(results);
+  if (gapFindings.length > 0) {
+    sectionHeader("Gap Insights — Cross-Domain Coverage Gaps");
+    bodyText(
+      "The following gaps were identified by correlating domain scores. A strong score in one domain paired with a weak complementary domain signals unrealized observability value.",
+      0, TXT2
+    );
+    y += 4;
+    for (const f of gapFindings) {
+      const sRgb = f.severity === "warning" ? [220, 160, 0] as [number,number,number] : [80, 130, 210] as [number,number,number];
+      const label = f.severity === "warning" ? "GAP" : "OPPORTUNITY";
+      ensureSpace(24);
+      pdf.setFillColor(...SURF2);
+      pdf.rect(M, y, CW, 0.5, "F");
+      y += 4;
+      // Label + title
+      pdf.setFontSize(6.5); pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(...sRgb);
+      pdf.text(label, M, y);
+      pdf.setFontSize(9); pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(...TXT1);
+      pdf.text(clean(f.title), M + 18, y);
+      y += 5;
+      // Detail line (scores)
+      if (f.detail) {
+        pdf.setFontSize(7); pdf.setFont(BODY_FONT, "normal");
+        pdf.setTextColor(...TXT3);
+        pdf.text(clean(f.detail), M, y);
+        y += 4;
+      }
+      // Description
+      if (f.description) {
+        const dLines = pdf.splitTextToSize(clean(f.description), CW);
+        pdf.setFontSize(8); pdf.setFont(BODY_FONT, "normal");
+        pdf.setTextColor(...TXT2);
+        for (const ln of dLines) { ensureSpace(5); pdf.text(ln, M, y); y += 4; }
+      }
+      // Recommendation
+      if (f.recommendation) {
+        const rLines = pdf.splitTextToSize(`→ ${clean(f.recommendation)}`, CW - 4);
+        pdf.setFontSize(7.5); pdf.setFont(BODY_FONT, "normal");
+        pdf.setTextColor(...TEAL);
+        for (const ln of rLines) { ensureSpace(4); pdf.text(ln, M + 4, y); y += 3.8; }
+      }
+      y += 6;
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════
+  // SECTION 3 — Probe Findings
   // ══════════════════════════════════════════════════════════════════════════════
 
   if (results.findings.length > 0) {
@@ -469,7 +522,7 @@ export function buildObsEvalPdf(results: ObsFullEvalResults, meta: ObsEvalPdfMet
   }
 
   // ══════════════════════════════════════════════════════════════════════════════
-  // SECTION 3 — Domain Detail (probe-level evidence)
+  // SECTION 4 — Domain Detail (probe-level evidence)
   // ══════════════════════════════════════════════════════════════════════════════
 
   sectionHeader("Domain Detail");
@@ -533,7 +586,7 @@ export function buildObsEvalPdf(results: ObsFullEvalResults, meta: ObsEvalPdfMet
   }
 
   // ══════════════════════════════════════════════════════════════════════════════
-  // SECTION 4 — Remediation Roadmap
+  // SECTION 5 — Remediation Roadmap
   // ══════════════════════════════════════════════════════════════════════════════
 
   sectionHeader("Remediation Roadmap");
