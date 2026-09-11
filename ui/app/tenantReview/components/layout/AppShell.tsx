@@ -25,7 +25,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
           </AppHeader.NavItems>
           <AppHeader.ActionItems>
             <Button onClick={() => { void navigate("/"); }} size="condensed">
-              Pulse Assessment
+              Atlas
             </Button>
             <AppHeader.ActionButton
               onClick={() => { void navigate(tenantReviewPath("/review-settings")); }}

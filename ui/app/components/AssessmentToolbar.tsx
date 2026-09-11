@@ -174,6 +174,9 @@ export const AssessmentToolbar: React.FC<AssessmentToolbarProps> = ({
         <Button onClick={() => navigate("/tenant-review")} size="condensed">
           Tenant Review
         </Button>
+        <Button onClick={() => navigate("/observability")} size="condensed">
+          Observability Eval
+        </Button>
         {/* Reports — persona PDFs (Executive / Tactical / Technical)
             and the Custom builder are client-side jsPDF and ship to
             every tenant. The Smart (Assist) item is the ONLY

@@ -156,7 +156,7 @@ export function buildReport(args: BuildReportArgs): PerfReport {
   return {
     schemaVersion: 1,
     generated: new Date().toISOString(),
-    app: { name: 'Pulse Assessment', version: APP_VERSION },
+    app: { name: 'Atlas', version: APP_VERSION },
     environment: {
       tenant: args.tenant,
       date: args.date,

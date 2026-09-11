@@ -237,7 +237,7 @@ export const Home: React.FC = () => {
                 lineHeight: 1.2,
               }}
             >
-              ESA Tenant Evaluator
+              Atlas
             </Flex>
           </Flex>
         </Flex>

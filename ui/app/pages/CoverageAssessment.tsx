@@ -45,7 +45,7 @@ export const CoverageAssessment: React.FC<Props> = ({ history, coverageData, sca
   const [chartSize, setChartSize] = useState(500);
   const [isMobile, setIsMobile] = useState(false);
   const [selectedCap, setSelectedCap] = useState<string | null>(null);
-  const VIEW_MODE_KEY = "pulse-assessment-view-mode";
+  const VIEW_MODE_KEY = "atlas-view-mode";
   const [viewMode, setViewMode] = useState<ViewMode>(
     () => (localStorage.getItem(VIEW_MODE_KEY) as ViewMode) ?? "coverage"
   );

@@ -66,53 +66,107 @@ export function buildAiNarrativePdf(markdown: string, meta: AiNarrativeMeta): js
   const W = 210, H = 297, M = 15, CW = W - 2 * M;
   let y = 0;
 
-  const paintBg = () => { pdf.setFillColor(11, 11, 26); pdf.rect(0, 0, W, H, "F"); };
-  const addTopBar = () => { pdf.setFillColor(55, 100, 220); pdf.rect(0, 0, W, 3, "F"); };
+  // Design tokens
+  const BG: [number,number,number]       = [10, 12, 30];
+  const SURF: [number,number,number]     = [18, 22, 55];
+  const BLUE: [number,number,number]     = [20, 100, 255];
+  const BLUE_DIM: [number,number,number] = [40, 70, 160];
+  const TEAL: [number,number,number]     = [0, 195, 155];
+  const TXT1: [number,number,number]     = [228, 232, 255];
+  const TXT2: [number,number,number]     = [120, 130, 175];
+  const TXT3: [number,number,number]     = [65, 75, 115];
+
+  const paintBg = () => { pdf.setFillColor(...BG); pdf.rect(0, 0, W, H, "F"); };
+  const addRunningHeader = () => {
+    pdf.setFillColor(...SURF);
+    pdf.rect(0, 0, W, 10, "F");
+    pdf.setFillColor(...BLUE);
+    pdf.rect(0, 0, W, 1.5, "F");
+    pdf.setFontSize(6); pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(...BLUE_DIM);
+    pdf.text("ATLAS", M, 7.5);
+    pdf.setFont(BODY_FONT, "normal");
+    pdf.setTextColor(...TXT3);
+    pdf.text(`${meta.tenant}  ·  ${meta.date}`, W / 2, 7.5, { align: "center" });
+  };
   const ensureSpace = (need: number) => {
-    if (y + need > H - 18) { pdf.addPage(); paintBg(); addTopBar(); y = 20; }
+    if (y + need > H - 16) { pdf.addPage(); paintBg(); addRunningHeader(); y = 16; }
   };
 
   // ── header ──
-  paintBg(); addTopBar();
-  pdf.setTextColor(55, 100, 220);
+  paintBg();
+
+  // ── Hero band ──
+  const HERO_H = 52;
+  pdf.setFillColor(...SURF);
+  pdf.rect(0, 0, W, HERO_H, "F");
+  pdf.setFillColor(...BLUE);
+  pdf.rect(0, 0, 5, HERO_H, "F");
+  // Decorative diagonals
+  pdf.setDrawColor(...BLUE_DIM); pdf.setLineWidth(0.25);
+  for (let di = 0; di < 6; di++) {
+    const ox = W - 55 + di * 10;
+    pdf.line(ox, 0, ox + HERO_H * 0.55, HERO_H);
+  }
+  pdf.setLineWidth(0.2);
+
+  // ATLAS wordmark
+  pdf.setFontSize(28); pdf.setFont("helvetica", "bold");
+  pdf.setTextColor(255, 255, 255);
+  pdf.text("ATLAS", M + 4, 24);
+  // Smart Report label
+  pdf.setFontSize(7.5); pdf.setFont("helvetica", "normal");
+  pdf.setTextColor(...BLUE_DIM);
+  pdf.text("Smart Report  ·  by Dynatrace", M + 4, 33);
+  // Separator
+  pdf.setDrawColor(...BLUE); pdf.setLineWidth(0.6);
+  pdf.line(M + 4, 38, M + 4 + 70, 38);
+  pdf.setLineWidth(0.2);
+
+  // Title (right side of hero)
   pdf.setFontSize(7); pdf.setFont("helvetica", "bold");
-  pdf.text("DYNATRACE PLATFORM - PULSE ASSESSMENT - SMART REPORT", W / 2, 12, { align: "center" });
-  pdf.setTextColor(232, 232, 240);
-  pdf.setFontSize(19); pdf.setFont("helvetica", "bold");
-  const titleLines = pdf.splitTextToSize(clean(meta.title), CW);
-  pdf.text(titleLines, W / 2, 23, { align: "center" });
-  y = 23 + titleLines.length * 8;
-  pdf.setFontSize(9); pdf.setFont(BODY_FONT, "normal");
-  pdf.setTextColor(140, 145, 180);
-  pdf.text(`${meta.tenant}  -  ${meta.date}  -  Coverage ${meta.coverage}%  -  Utilization ${meta.utilization}/100`, W / 2, y, { align: "center" });
-  y += 6;
-  // The request that produced this report — provenance for the reader.
+  pdf.setTextColor(...BLUE_DIM);
+  pdf.text("REPORT", W - M, 18, { align: "right" });
+  const titleLines = pdf.splitTextToSize(clean(meta.title), 80);
+  pdf.setFontSize(11); pdf.setFont("helvetica", "bold");
+  pdf.setTextColor(...TXT1);
+  pdf.text(titleLines, W - M, 27, { align: "right" });
+
+  y = HERO_H + 10;
+  // Meta strip
+  pdf.setFontSize(8.5); pdf.setFont(BODY_FONT, "normal");
+  pdf.setTextColor(...TXT2);
+  pdf.text(`${meta.tenant}  ·  ${meta.date}  ·  Coverage ${meta.coverage}%  ·  Utilization ${meta.utilization}`, W / 2, y, { align: "center" });
+  y += 5;
+  // Ask (the user's question)
   pdf.setFontSize(7.5);
-  pdf.setTextColor(120, 125, 160);
+  pdf.setTextColor(...TXT3);
   const askLines = pdf.splitTextToSize(`"${clean(meta.ask)}"`, CW - 20);
   pdf.text(askLines, W / 2, y, { align: "center" });
-  y += askLines.length * 3.6 + 8;
+  y += askLines.length * 3.6 + 10;
 
   // ── markdown body ──
   const sectionHeader = (title: string) => {
     ensureSpace(20);
-    pdf.setFillColor(30, 45, 90);
-    pdf.roundedRect(M, y - 4, CW, 10, 2, 2, "F");
-    pdf.setFontSize(11); pdf.setFont("helvetica", "bold");
-    pdf.setTextColor(255, 255, 255);
-    pdf.text(clean(title), M + 5, y + 2.8);
-    y += 13;
+    pdf.setFillColor(...BLUE);
+    pdf.rect(M, y - 3, 3, 11, "F");
+    pdf.setFillColor(...SURF);
+    pdf.rect(M + 3, y - 3, CW - 3, 11, "F");
+    pdf.setFontSize(10); pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(...TXT1);
+    pdf.text(clean(title), M + 10, y + 4.5);
+    y += 15;
   };
   const subHeader = (title: string) => {
     ensureSpace(10);
     pdf.setFontSize(9.5); pdf.setFont("helvetica", "bold");
-    pdf.setTextColor(140, 190, 255);
+    pdf.setTextColor(...TEAL);
     pdf.text(clean(title), M, y);
     y += 5.5;
   };
   const paragraph = (text: string, indent = 0) => {
     pdf.setFontSize(8.5); pdf.setFont(BODY_FONT, "normal");
-    pdf.setTextColor(200, 205, 228);
+    pdf.setTextColor(...TXT2);
     const lines = pdf.splitTextToSize(clean(text), CW - indent);
     for (const ln of lines) {
       ensureSpace(5);
@@ -123,7 +177,7 @@ export function buildAiNarrativePdf(markdown: string, meta: AiNarrativeMeta): js
   };
   const bulletItem = (text: string) => {
     ensureSpace(6);
-    pdf.setFillColor(55, 100, 220);
+    pdf.setFillColor(...TEAL);
     pdf.circle(M + 1.5, y - 1.2, 0.9, "F");
     paragraph(text, 6);
   };
@@ -150,12 +204,16 @@ export function buildAiNarrativePdf(markdown: string, meta: AiNarrativeMeta): js
   const pages = pdf.getNumberOfPages();
   for (let i = 1; i <= pages; i++) {
     pdf.setPage(i);
-    pdf.setFontSize(6); pdf.setFont(BODY_FONT, "normal");
-    pdf.setTextColor(90, 95, 130);
-    pdf.text(`Dynatrace Platform - Pulse Assessment  |  ${meta.tenant}  |  ${meta.date}`, M, H - 8);
-    pdf.text(`Page ${i} / ${pages}`, W - M, H - 8, { align: "right" });
-    pdf.setTextColor(200, 170, 90);
-    pdf.text("Generated with Davis CoPilot - review before sharing.", W / 2, H - 8, { align: "center" });
+    pdf.setFillColor(...SURF);
+    pdf.rect(0, H - 10, W, 10, "F");
+    pdf.setFillColor(...BLUE);
+    pdf.rect(0, H - 10, W, 1, "F");
+    pdf.setFontSize(5.5); pdf.setFont(BODY_FONT, "normal");
+    pdf.setTextColor(...TXT3);
+    pdf.text(`ATLAS  ·  ${meta.tenant}  ·  ${meta.date}`, M, H - 4);
+    pdf.text(`Page ${i} / ${pages}`, W - M, H - 4, { align: "right" });
+    pdf.setTextColor(200, 160, 60);
+    pdf.text("Generated with Davis CoPilot - review before sharing.", W / 2, H - 4, { align: "center" });
   }
 
   return pdf;
@@ -163,5 +221,5 @@ export function buildAiNarrativePdf(markdown: string, meta: AiNarrativeMeta): js
 
 /** Browser entry point: build and trigger the download. */
 export function generateAiNarrativePdf(markdown: string, meta: AiNarrativeMeta): void {
-  buildAiNarrativePdf(markdown, meta).save(`pulse-smart-report-${meta.tenant}-${meta.date || "latest"}.pdf`);
+  buildAiNarrativePdf(markdown, meta).save(`atlas-smart-report-${meta.tenant}-${meta.date || "latest"}.pdf`);
 }

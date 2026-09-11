@@ -22,6 +22,9 @@ const TenantReviewApp = React.lazy(() =>
 const AiInsightsPage = React.lazy(() =>
   import("./pages/AiInsightsPage").then(m => ({ default: m.AiInsightsPage }))
 );
+const ObservabilityEvaluationPage = React.lazy(() =>
+  import("./pages/ObservabilityEvaluationPage").then(m => ({ default: m.ObservabilityEvaluationPage }))
+);
 
 const LoadingFallback = () => (
   <Flex flexDirection="column" gap={16} style={{ padding: 32 }}>
@@ -87,6 +90,13 @@ export const App = () => {
                 <ErrorBoundary>
                   <Suspense fallback={<LoadingFallback />}>
                     <TenantReviewApp coverageData={coverageData} snapshots={history.snapshots} />
+                  </Suspense>
+                </ErrorBoundary>
+              } />
+              <Route path="/observability" element={
+                <ErrorBoundary>
+                  <Suspense fallback={<LoadingFallback />}>
+                    <ObservabilityEvaluationPage />
                   </Suspense>
                 </ErrorBoundary>
               } />

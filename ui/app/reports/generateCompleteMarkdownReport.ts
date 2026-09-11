@@ -210,7 +210,7 @@ export function buildCompleteMarkdownReport(input: CompleteMarkdownReportInput):
     0,
   );
   const lines: string[] = [
-    "# ESA Tenant Evaluator: Complete Results",
+    "# Atlas: Complete Results",
     "",
     `> Tenant: \`${input.tenant}\` | Assessment date: ${input.date || "N/A"} | Exported: ${generatedAt}`,
     "",

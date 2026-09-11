@@ -198,7 +198,7 @@ interface S {
 
 const STRINGS: Record<PersonaLang, S> = {
   en: {
-    reportOf: "Dynatrace Platform - Pulse Assessment",
+    reportOf: "Dynatrace Atlas",
     execTitle: "Executive Report", tactTitle: "Tactical Report", techTitle: "Technical Report", customTitle: "Custom Report",
     coverage: "COVERAGE", utilization: "UTILIZATION", criteriaPassing: "CRITERIA PASSING", entitiesMonitored: "ENTITIES MONITORED",
     postureTitle: "Observability Posture at a Glance",
@@ -281,12 +281,12 @@ const STRINGS: Record<PersonaLang, S> = {
     appendixTitle: "Appendix - Environment & Run",
     hosts: "Hosts", services: "Services", apps: "Web apps", clusters: "K8s clusters",
     recordsScanned: "records scanned", queriesOk: "queries OK",
-    footer: (t, d) => `Dynatrace Platform - Pulse Assessment  |  ${t}  |  ${d}`,
+    footer: (t, d) => `Dynatrace Atlas  |  ${t}  |  ${d}`,
     page: (i, n) => `Page ${i} / ${n}`,
     none: "None",
   },
   pt: {
-    reportOf: "Plataforma Dynatrace - Pulse Assessment",
+    reportOf: "Dynatrace Atlas",
     execTitle: "Relatorio Executivo", tactTitle: "Relatorio Tatico", techTitle: "Relatorio Tecnico", customTitle: "Relatorio Personalizado",
     coverage: "COBERTURA", utilization: "UTILIZACAO", criteriaPassing: "CRITERIOS OK", entitiesMonitored: "ENTIDADES MONITORADAS",
     postureTitle: "Postura de Observabilidade em Resumo",
@@ -369,12 +369,12 @@ const STRINGS: Record<PersonaLang, S> = {
     appendixTitle: "Apendice - Ambiente & Execucao",
     hosts: "Hosts", services: "Servicos", apps: "Apps web", clusters: "Clusters K8s",
     recordsScanned: "registros varridos", queriesOk: "queries OK",
-    footer: (t, d) => `Plataforma Dynatrace - Pulse Assessment  |  ${t}  |  ${d}`,
+    footer: (t, d) => `Dynatrace Atlas  |  ${t}  |  ${d}`,
     page: (i, n) => `Pagina ${i} / ${n}`,
     none: "Nenhum",
   },
   es: {
-    reportOf: "Plataforma Dynatrace - Pulse Assessment",
+    reportOf: "Dynatrace Atlas",
     execTitle: "Informe Ejecutivo", tactTitle: "Informe Tactico", techTitle: "Informe Tecnico", customTitle: "Informe Personalizado",
     coverage: "COBERTURA", utilization: "UTILIZACION", criteriaPassing: "CRITERIOS OK", entitiesMonitored: "ENTIDADES MONITOREADAS",
     postureTitle: "Postura de Observabilidad en Resumen",
@@ -457,7 +457,7 @@ const STRINGS: Record<PersonaLang, S> = {
     appendixTitle: "Apendice - Entorno y Ejecucion",
     hosts: "Hosts", services: "Servicios", apps: "Apps web", clusters: "Clusters K8s",
     recordsScanned: "registros escaneados", queriesOk: "queries OK",
-    footer: (t, d) => `Plataforma Dynatrace - Pulse Assessment  |  ${t}  |  ${d}`,
+    footer: (t, d) => `Dynatrace Atlas  |  ${t}  |  ${d}`,
     page: (i, n) => `Pagina ${i} / ${n}`,
     none: "Ninguno",
   },
@@ -632,24 +632,49 @@ export function buildPersonaReport(
   const W = 210, H = 297, M = 15, CW = W - 2 * M;
   let y = 0;
 
-  const GRID: [number, number, number] = [34, 39, 68];
-  const TXT_DIM: [number, number, number] = [140, 145, 175];
+  // Design tokens
+  const BG: [number,number,number]       = [10, 12, 30];
+  const SURF: [number,number,number]     = [18, 22, 55];
+  const SURF2: [number,number,number]    = [26, 32, 72];
+  const BLUE: [number,number,number]     = [20, 100, 255];
+  const BLUE_DIM: [number,number,number] = [40, 70, 160];
+  const TEAL: [number,number,number]     = [0, 195, 155];
+  const TXT1: [number,number,number]     = [228, 232, 255];
+  const TXT2: [number,number,number]     = [120, 130, 175];
+  const TXT3: [number,number,number]     = [65, 75, 115];
+  const BORDER: [number,number,number]   = [35, 45, 92];
 
-  const paintBg = () => { pdf.setFillColor(11, 11, 26); pdf.rect(0, 0, W, H, "F"); };
-  const addTopBar = () => { pdf.setFillColor(55, 100, 220); pdf.rect(0, 0, W, 3, "F"); };
-  const ensureSpace = (need: number) => {
-    if (y + need > H - 18) { pdf.addPage(); paintBg(); addTopBar(); y = 20; }
+  const paintBg = () => { pdf.setFillColor(...BG); pdf.rect(0, 0, W, H, "F"); };
+  const addRunningHeader = () => {
+    pdf.setFillColor(...SURF);
+    pdf.rect(0, 0, W, 10, "F");
+    pdf.setFillColor(...BLUE);
+    pdf.rect(0, 0, W, 1.5, "F");
+    pdf.setFontSize(6); pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(...BLUE_DIM);
+    pdf.text("ATLAS", M, 7.5);
+    pdf.setFont(BODY_FONT, "normal");
+    pdf.setTextColor(...TXT3);
+    const runMeta = `${tenant}  ·  ${date || ""}`;
+    pdf.text(runMeta, W / 2, 7.5, { align: "center" });
   };
-  const sectionHeader = (title: string, rgb: [number, number, number] = [30, 45, 90]) => {
-    ensureSpace(22);
-    pdf.setFillColor(rgb[0], rgb[1], rgb[2]);
-    pdf.roundedRect(M, y - 4, CW, 11, 2, 2, "F");
-    pdf.setFontSize(12); pdf.setFont("helvetica", "bold");
-    pdf.setTextColor(255, 255, 255);
-    pdf.text(clean(title), M + 5, y + 3.4);
+  const ensureSpace = (need: number) => {
+    if (y + need > H - 16) { pdf.addPage(); paintBg(); addRunningHeader(); y = 16; }
+  };
+  const sectionHeader = (title: string, _rgb?: [number, number, number]) => {
+    ensureSpace(20);
+    // Left accent bar
+    pdf.setFillColor(...BLUE);
+    pdf.rect(M, y - 3, 3, 11, "F");
+    // Subtle surface background
+    pdf.setFillColor(...SURF);
+    pdf.rect(M + 3, y - 3, CW - 3, 11, "F");
+    pdf.setFontSize(10); pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(...TXT1);
+    pdf.text(clean(title), M + 10, y + 4.5);
     y += 15;
   };
-  const bodyText = (text: string, size = 8.5, color: [number, number, number] = [190, 195, 220], indent = 0, maxW = CW - indent) => {
+  const bodyText = (text: string, size = 8.5, color: [number, number, number] = [200, 205, 235], indent = 0, maxW = CW - indent) => {
     pdf.setFontSize(size); pdf.setFont(BODY_FONT, "normal");
     pdf.setTextColor(color[0], color[1], color[2]);
     const lines = pdf.splitTextToSize(clean(text), maxW);
@@ -661,46 +686,91 @@ export function buildPersonaReport(
   };
 
   const header = (personaTitle: string) => {
-    paintBg(); addTopBar();
-    pdf.setTextColor(55, 100, 220);
+    paintBg();
+
+    // ── Hero band (top 58mm) ──
+    const HERO_H = 58;
+    pdf.setFillColor(...SURF);
+    pdf.rect(0, 0, W, HERO_H, "F");
+
+    // Left accent stripe (full hero height)
+    pdf.setFillColor(...BLUE);
+    pdf.rect(0, 0, 5, HERO_H, "F");
+
+    // Decorative diagonal lines (right side of hero)
+    pdf.setDrawColor(...BLUE_DIM); pdf.setLineWidth(0.25);
+    for (let i = 0; i < 6; i++) {
+      const ox = W - 55 + i * 10;
+      pdf.line(ox, 0, ox + HERO_H * 0.55, HERO_H);
+    }
+    pdf.setLineWidth(0.2);
+
+    // ATLAS wordmark
+    pdf.setFontSize(34); pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(255, 255, 255);
+    pdf.text("ATLAS", M + 4, 28);
+
+    // Tagline
+    pdf.setFontSize(7.5); pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(...BLUE_DIM);
+    pdf.text("Tenant Intelligence Platform  ·  by Dynatrace", M + 4, 38);
+
+    // Thin separator line below wordmark
+    pdf.setDrawColor(...BLUE); pdf.setLineWidth(0.6);
+    pdf.line(M + 4, 43, M + 4 + 80, 43);
+    pdf.setLineWidth(0.2);
+
+    // Report type label (upper right of hero band)
     pdf.setFontSize(7); pdf.setFont("helvetica", "bold");
-    pdf.text(T.reportOf.toUpperCase(), W / 2, 12, { align: "center" });
-    pdf.setTextColor(232, 232, 240);
-    pdf.setFontSize(22); pdf.setFont("helvetica", "bold");
-    pdf.text(clean(personaTitle), W / 2, 24, { align: "center" });
+    pdf.setTextColor(...BLUE_DIM);
+    pdf.text("REPORT TYPE", W - M, 28, { align: "right" });
+    pdf.setFontSize(12); pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(...TXT1);
+    pdf.text(clean(personaTitle), W - M, 38, { align: "right" });
+
+    // ── Tenant / date strip ──
+    y = HERO_H + 12;
     pdf.setFontSize(9); pdf.setFont(BODY_FONT, "normal");
-    pdf.setTextColor(140, 145, 180);
-    pdf.text(`${tenant}  -  ${date || new Date().toLocaleDateString()}`, W / 2, 32, { align: "center" });
-    y = 42;
+    pdf.setTextColor(...TXT2);
+    pdf.text(`${tenant}  ·  ${date || new Date().toLocaleDateString()}`, M + 4, y);
+    y += 14;
   };
 
   const kpiRow = (metrics: { value: string; label: string; color: [number, number, number] }[]) => {
-    const bw = (CW - (metrics.length - 1) * 4) / metrics.length;
-    const bh = 22;
+    const gap = 5;
+    const bw = (CW - (metrics.length - 1) * gap) / metrics.length;
+    const bh = 28;
     metrics.forEach((m, i) => {
-      const x = M + i * (bw + 4);
-      pdf.setFillColor(14, 17, 38);
-      pdf.setDrawColor(m.color[0], m.color[1], m.color[2]);
-      pdf.setLineWidth(0.4);
-      pdf.roundedRect(x, y, bw, bh, 2, 2, "FD");
-      pdf.setFontSize(15); pdf.setFont("helvetica", "bold");
-      pdf.setTextColor(m.color[0], m.color[1], m.color[2]);
-      pdf.text(m.value, x + bw / 2, y + 10, { align: "center" });
-      pdf.setFontSize(5.5);
-      pdf.setTextColor(110, 115, 150);
-      pdf.text(m.label, x + bw / 2, y + 17, { align: "center" });
+      const x = M + i * (bw + gap);
+      // Card background
+      pdf.setFillColor(...SURF);
+      pdf.roundedRect(x, y, bw, bh, 3, 3, "F");
+      // Top coloured stripe
+      pdf.setFillColor(...m.color);
+      pdf.roundedRect(x, y, bw, 3.5, 3, 3, "F");
+      pdf.rect(x, y + 1.5, bw, 2, "F"); // fill in the rounded bottom of stripe
+      // Value — large bold number
+      pdf.setFontSize(20); pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(...m.color);
+      pdf.text(m.value, x + bw / 2, y + 18, { align: "center" });
+      // Label
+      pdf.setFontSize(5.5); pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(...TXT3);
+      pdf.text(m.label.toUpperCase(), x + bw / 2, y + 24, { align: "center" });
     });
-    pdf.setLineWidth(0.2);
-    y += bh + 8;
+    y += bh + 10;
   };
 
-  const bullet = (text: string, color: [number, number, number] = [190, 195, 220]) => {
+  const bullet = (text: string, color: [number, number, number] = [200, 205, 235]) => {
     ensureSpace(6);
-    pdf.setFillColor(55, 100, 220);
+    pdf.setFillColor(...TEAL);
     pdf.circle(M + 1.5, y - 1.2, 0.9, "F");
     bodyText(text, 8.5, color, 6);
     y += 1.5;
   };
+
+  // Silence unused variable warning — SURF2 is available for future use
+  void SURF2;
 
   /* ── chart primitives (pure jsPDF vectors) ─────────────────────── */
 
@@ -726,7 +796,7 @@ export function buildPersonaReport(
     ensureSpace(8);
     pdf.setFontSize(6); pdf.setFont(BODY_FONT, "normal");
     pdf.setFillColor(80, 180, 255); pdf.rect(M, y - 2.4, 3, 2.4, "F");
-    pdf.setTextColor(TXT_DIM[0], TXT_DIM[1], TXT_DIM[2]);
+    pdf.setTextColor(...TXT2);
     pdf.text(T.legCoverage, M + 4.5, y);
     pdf.setFillColor(180, 130, 255); pdf.rect(M + 30, y - 2.4, 3, 2.4, "F");
     pdf.text(T.legUtilization, M + 34.5, y);
@@ -739,7 +809,7 @@ export function buildPersonaReport(
       pdf.setTextColor(210, 214, 235);
       pdf.text(clean(cap.name), M, y + 2.6);
       // gridlines
-      pdf.setDrawColor(GRID[0], GRID[1], GRID[2]); pdf.setLineWidth(0.15);
+      pdf.setDrawColor(...BORDER); pdf.setLineWidth(0.15);
       for (const g of [25, 50, 75, 100]) pdf.line(bx + bw * g / 100, y - 1, bx + bw * g / 100, y + 6.2);
       // coverage bar
       pdf.setFillColor(24, 28, 52); pdf.rect(bx, y, bw, 2.4, "F");
@@ -768,9 +838,9 @@ export function buildPersonaReport(
     pdf.setFontSize(5.5); pdf.setFont(BODY_FONT, "normal");
     for (const g of [0, 25, 50, 75, 100]) {
       const yy = y + gh - gh * g / 100;
-      pdf.setDrawColor(GRID[0], GRID[1], GRID[2]); pdf.setLineWidth(0.15);
+      pdf.setDrawColor(...BORDER); pdf.setLineWidth(0.15);
       pdf.line(gx, yy, gx + gw, yy);
-      pdf.setTextColor(TXT_DIM[0], TXT_DIM[1], TXT_DIM[2]);
+      pdf.setTextColor(...TXT2);
       pdf.text(`${g}`, gx - 2, yy + 1, { align: "right" });
     }
     const n = points.length;
@@ -786,7 +856,7 @@ export function buildPersonaReport(
       pdf.setFontSize(5.5); pdf.setTextColor(160, 210, 255);
       pdf.text(`${points[i].value}`, px(i), py(points[i].value) - 2, { align: "center" });
       if (n <= 8 || i % 2 === 0 || i === n - 1) {
-        pdf.setTextColor(TXT_DIM[0], TXT_DIM[1], TXT_DIM[2]);
+        pdf.setTextColor(...TXT2);
         pdf.text(points[i].label, px(i), y + gh + 3.5, { align: "center" });
       }
     }
@@ -813,7 +883,7 @@ export function buildPersonaReport(
       const pw = t.total > 0 ? (t.passed / t.total) * (tw - 0.6) : 0;
       pdf.setFillColor(t.color[0], t.color[1], t.color[2]);
       if (pw > 0) pdf.rect(cx, y, pw, 3, "F");
-      pdf.setFontSize(5); pdf.setTextColor(TXT_DIM[0], TXT_DIM[1], TXT_DIM[2]);
+      pdf.setFontSize(5); pdf.setTextColor(...TXT2);
       pdf.text(`${t.label} ${t.passed}/${t.total}`, cx, y + 6);
       cx += tw;
     }
@@ -956,7 +1026,7 @@ export function buildPersonaReport(
       }
     } catch { /* canvas unavailable */ }
     if (!embedded) covVsMatChart();
-    bodyText(T.covVsUtilNote, 8, TXT_DIM);
+    bodyText(T.covVsUtilNote, 8, TXT2);
     y += 4;
   };
 
@@ -982,7 +1052,7 @@ export function buildPersonaReport(
       pdf.text(`${p}%  (${t.passed}/${t.total})`, bx + bw + 3, y + 3.4);
       y += 7.5;
     }
-    bodyText(T.tierNote(pct(tierTotals.f.passed, tierTotals.f.total), pct(tierTotals.b.passed, tierTotals.b.total), pct(tierTotals.e.passed, tierTotals.e.total)), 8, TXT_DIM);
+    bodyText(T.tierNote(pct(tierTotals.f.passed, tierTotals.f.total), pct(tierTotals.b.passed, tierTotals.b.total), pct(tierTotals.e.passed, tierTotals.e.total)), 8, TXT2);
     y += 4;
   };
 
@@ -1026,7 +1096,7 @@ export function buildPersonaReport(
       pdf.setTextColor(210, 214, 235);
       pdf.text(clean(cap.name), M, y + 3);
       // Grid + users bar
-      pdf.setDrawColor(GRID[0], GRID[1], GRID[2]); pdf.setLineWidth(0.15);
+      pdf.setDrawColor(...BORDER); pdf.setLineWidth(0.15);
       for (const q of [25, 50, 75, 100]) pdf.line(bx + bw * q / 100, y - 0.5, bx + bw * q / 100, y + 5);
       pdf.setFillColor(24, 28, 52);
       pdf.roundedRect(bx, y, bw, 4, 1, 1, "F");
@@ -1053,14 +1123,14 @@ export function buildPersonaReport(
       const appList = (entry?.apps ?? []).slice(0, 3)
         .map(a => `${a.appId} (${a.users})`).join(", ");
       if (appList) {
-        pdf.setFontSize(6); pdf.setTextColor(TXT_DIM[0], TXT_DIM[1], TXT_DIM[2]);
+        pdf.setFontSize(6); pdf.setTextColor(...TXT2);
         pdf.text(clean(appList).slice(0, 120), bx, y + 1.5);
         y += 3.5;
       }
       y += 1.5;
     }
     y += 2;
-    bodyText(T.adoptionNote, 7, TXT_DIM);
+    bodyText(T.adoptionNote, 7, TXT2);
     y += 3;
   };
 
@@ -1069,7 +1139,7 @@ export function buildPersonaReport(
     sectionHeader(T.evolutionTitle);
     evolutionChart(historyPoints);
     const delta = historyPoints[historyPoints.length - 1].value - historyPoints[0].value;
-    bodyText(T.evolutionNote(historyPoints.length, `${delta >= 0 ? "+" : ""}${delta}`), 8, TXT_DIM);
+    bodyText(T.evolutionNote(historyPoints.length, `${delta >= 0 ? "+" : ""}${delta}`), 8, TXT2);
     y += 4;
   };
 
@@ -1134,7 +1204,7 @@ export function buildPersonaReport(
         );
         pdf.rect(x0, y + 3, x1 - x0 - 0.8, 4, "F");
         pdf.setFontSize(5.5); pdf.setFont(BODY_FONT, "normal");
-        pdf.setTextColor(TXT_DIM[0], TXT_DIM[1], TXT_DIM[2]);
+        pdf.setTextColor(...TXT2);
         pdf.text(b.label, (x0 + x1) / 2, y + 10.5, { align: "center" });
       }
       // marker at current overall utilization
@@ -1245,7 +1315,7 @@ export function buildPersonaReport(
       pdf.setFontSize(7); pdf.setFont("helvetica", "bold");
       pdf.setTextColor(210, 214, 235);
       pdf.text(clean(g.team).slice(0, 34), M, y + 3);
-      pdf.setDrawColor(GRID[0], GRID[1], GRID[2]); pdf.setLineWidth(0.15);
+      pdf.setDrawColor(...BORDER); pdf.setLineWidth(0.15);
       for (const q of [25, 50, 75, 100]) pdf.line(bx + bw * q / 100, y - 0.5, bx + bw * q / 100, y + 5);
       pdf.setFillColor(24, 28, 52);
       pdf.roundedRect(bx, y, bw, 4, 1, 1, "F");
@@ -1254,18 +1324,18 @@ export function buildPersonaReport(
       pdf.setFontSize(7); pdf.setFont(BODY_FONT, "normal");
       pdf.setTextColor(120, 230, 180);
       pdf.text(`+${g.pts.toFixed(1)}%`, bx + bw + 3, y + 3.4);
-      pdf.setTextColor(TXT_DIM[0], TXT_DIM[1], TXT_DIM[2]);
+      pdf.setTextColor(...TXT2);
       pdf.text(`${g.items.length}`, W - M, y + 3.4, { align: "right" });
       y += 7.5;
     }
     y += 2;
-    bodyText(T.impactChartNote, 8, TXT_DIM);
+    bodyText(T.impactChartNote, 8, TXT2);
     y += 3;
   };
 
   const secPlan = () => {
     sectionHeader(T.planTitle);
-    bodyText(T.planIntro, 8, TXT_DIM);
+    bodyText(T.planIntro, 8, TXT2);
     y += 3;
     const unlockIds = new Map<string, Set<string>>();
     for (const cap of capabilities) {
@@ -1281,7 +1351,7 @@ export function buildPersonaReport(
       pdf.setTextColor(rgb[0], rgb[1], rgb[2]);
       pdf.text(clean(T.teamLabel(g.team)), M, y);
       pdf.setFontSize(7); pdf.setFont(BODY_FONT, "normal");
-      pdf.setTextColor(TXT_DIM[0], TXT_DIM[1], TXT_DIM[2]);
+      pdf.setTextColor(...TXT2);
       pdf.text(T.teamSummary(g.items.length, g.pts.toFixed(1)), W - M, y, { align: "right" });
       y += 5;
       for (const f of g.items.slice(0, 6)) {
@@ -1302,7 +1372,7 @@ export function buildPersonaReport(
         const gain = ((100 / capN) / capabilities.length).toFixed(1);
         const unlock = unlockIds.get(f.cap)?.has(f.cr.id) ? `  -  ${T.unlockTag}` : "";
         pdf.setFont(BODY_FONT, "normal"); pdf.setFontSize(7);
-        pdf.setTextColor(TXT_DIM[0], TXT_DIM[1], TXT_DIM[2]);
+        pdf.setTextColor(...TXT2);
         pdf.text(`${T.currentVsTarget(`${f.cr.value}%`, `${FONT_AVAILABLE ? "≥" : ">="}${f.th}%`)}  (${T.tierShort[f.cr.tier]}, ${effort})`, M + 7, y);
         pdf.setTextColor(120, 230, 180);
         pdf.text(`${T.ptsOverall(gain)}${unlock}`, W - M, y, { align: "right" });
@@ -1353,11 +1423,11 @@ export function buildPersonaReport(
       pdf.text(plan.next ? T.nlLine(plan.current, plan.next) : T.nlMaxed, W - M, y, { align: "right" });
       y += 4;
       if (plan.next && plan.needed.length > 0) {
-        bodyText(T.nlNeeds(plan.needed.length), 7, TXT_DIM, 4);
+        bodyText(T.nlNeeds(plan.needed.length), 7, TXT2, 4);
         for (const n of plan.needed.slice(0, 5)) {
           bodyText(`- ${stripPct(clean(n.cr.label))}: ${n.cr.value}% vs ${FONT_AVAILABLE ? "≥" : ">="}${n.th}% (${T.tierShort[n.cr.tier]})`, 7, [190, 195, 220], 8);
         }
-        if (plan.needed.length > 5) bodyText(`+${plan.needed.length - 5}...`, 7, TXT_DIM, 8);
+        if (plan.needed.length > 5) bodyText(`+${plan.needed.length - 5}...`, 7, TXT2, 8);
       }
       y += 3;
     }
@@ -1382,7 +1452,7 @@ export function buildPersonaReport(
       pdf.text(clean(cap.name), M, y);
       statusStrip(M + 62, CW - 62 - 14, ok, gapN, errN);
       pdf.setFontSize(6.5); pdf.setFont(BODY_FONT, "normal");
-      pdf.setTextColor(TXT_DIM[0], TXT_DIM[1], TXT_DIM[2]);
+      pdf.setTextColor(...TXT2);
       pdf.text(`${ok + gapN + errN}`, W - M, y, { align: "right" });
       y += 6;
     }
@@ -1401,7 +1471,7 @@ export function buildPersonaReport(
       } else if (plan.needed.length > 0) {
         bodyText(`${T.nextLevelTitle}: ${T.nlLine(plan.current, plan.next)} - ${T.nlNeeds(plan.needed.length)}`, 7.5, [160, 200, 255]);
         for (const n of plan.needed) {
-          bodyText(`- ${n.cr.id}  ${stripPct(clean(n.cr.label))}: ${n.cr.value}% vs ${FONT_AVAILABLE ? "≥" : ">="}${n.th}% (${T.tierShort[n.cr.tier]})`, 6.5, TXT_DIM, 4);
+          bodyText(`- ${n.cr.id}  ${stripPct(clean(n.cr.label))}: ${n.cr.value}% vs ${FONT_AVAILABLE ? "≥" : ">="}${n.th}% (${T.tierShort[n.cr.tier]})`, 6.5, TXT2, 4);
         }
       }
       y += 2;
@@ -1430,7 +1500,7 @@ export function buildPersonaReport(
         pdf.setFont(BODY_FONT, "normal");
         pdf.text(`${stripPct(clean(cr.label))}${proxyTag}`, M + 10, y);
         pdf.setFont(BODY_FONT, "normal");
-        pdf.setFontSize(7); pdf.setTextColor(TXT_DIM[0], TXT_DIM[1], TXT_DIM[2]);
+        pdf.setFontSize(7); pdf.setTextColor(...TXT2);
         pdf.text(`${cr.value}${cr.isRatio ? "%" : ""}  vs  ${clean(cr.thresholds)}   ${T.tierShort[cr.tier]}`, W - M, y, { align: "right" });
         y += 4;
 
@@ -1549,10 +1619,15 @@ export function buildPersonaReport(
   const pages = pdf.getNumberOfPages();
   for (let i = 1; i <= pages; i++) {
     pdf.setPage(i);
-    pdf.setFontSize(6); pdf.setFont(BODY_FONT, "normal");
-    pdf.setTextColor(90, 95, 130);
-    pdf.text(T.footer(tenant, date), M, H - 8);
-    pdf.text(T.page(i, pages), W - M, H - 8, { align: "right" });
+    // Footer bar
+    pdf.setFillColor(...SURF);
+    pdf.rect(0, H - 10, W, 10, "F");
+    pdf.setFillColor(...BLUE);
+    pdf.rect(0, H - 10, W, 1, "F");
+    pdf.setFontSize(5.5); pdf.setFont(BODY_FONT, "normal");
+    pdf.setTextColor(...TXT3);
+    pdf.text(`ATLAS  ·  ${T.footer(tenant ?? "", date ?? "")}`, M, H - 4);
+    pdf.text(T.page(i, pages), W - M, H - 4, { align: "right" });
   }
 
   return pdf;
@@ -1567,5 +1642,5 @@ export function generatePersonaReport(
 ): void {
   const pdf = buildPersonaReport(persona, input, lang, custom);
   if (!pdf) return;
-  pdf.save(`pulse-${persona}-report-${input.tenant}-${input.date || "latest"}-${lang}.pdf`);
+  pdf.save(`atlas-${persona}-report-${input.tenant}-${input.date || "latest"}-${lang}.pdf`);
 }

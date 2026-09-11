@@ -197,7 +197,7 @@ export const BestPractices: React.FC = () => {
               <Text style={{ fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: 1.6, color: Colors.Text.Primary.Default }}>
                 App
               </Text>
-              <Heading level={1}>ESA Tenant Evaluator</Heading>
+              <Heading level={1}>Atlas</Heading>
               <Text style={{ maxWidth: 760 }}>
                 Dedicated view for the app and the rubrics used to evaluate it. The app summary appears first, then the defined rubrics with notebook guidance below.
               </Text>

@@ -336,7 +336,7 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({
         <Flex alignItems="center" justifyContent="center" gap={8}>
           <img src={APP_ICON} alt="" width={36} height={36} style={{ borderRadius: 8 }} />
           <Flex flexDirection="column" style={{ fontSize: 20, fontWeight: 800, color: text, letterSpacing: -0.5, lineHeight: 1.2 }}>
-            ESA Tenant Evaluator
+            Atlas
           </Flex>
         </Flex>
       </Flex>
@@ -396,6 +396,9 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({
         />
         <Button onClick={() => navigate("/tenant-review")} variant="emphasized" color="primary" style={{ marginTop: 8 }}>
           Tenant Review
+        </Button>
+        <Button onClick={() => navigate("/observability")} variant="emphasized" color="primary" style={{ marginTop: 8 }}>
+          Observability Eval
         </Button>
         {hasResults && (
           <Flex flexDirection="column" alignItems="center" gap={6} style={{ marginTop: 12 }}>

@@ -1,11 +1,11 @@
 {
-  "environmentUrl": "https://mjs70956.apps.dynatrace.com/",
+  "environmentUrl": "https://yhu28601.apps.dynatrace.com/",
   "app": {
     "id": "my.esa.tenant.evaluator",
-    "name": "ESA Tenant Evaluator",
-    "description": "Assess Dynatrace maturity, tenant configuration, and Gen3 adoption.",
+    "name": "Atlas",
+    "description": "Tenant maturity, instrumentation gaps, and observability adoption insights.",
     "icon": "ui/assets/icon.svg",
-    "version": "2.6.2",
+    "version": "2.7.2",
     "scopes": [
       { "name": "storage:logs:read", "comment": "Log Analytics coverage" },
       { "name": "storage:events:read", "comment": "Security, Delivery, Problems" },

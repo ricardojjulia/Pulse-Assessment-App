@@ -1,5 +1,5 @@
 {
-  "name": "esa-tenant-evaluator",
+  "name": "dynatrace-atlas",
   "version": "2.5.15",
   "private": true,
   "scripts": {

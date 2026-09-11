@@ -104,7 +104,7 @@ export interface PerfReport {
 
   /** Identifies the app build that produced the report. */
   app: {
-    name: 'Pulse Assessment';
+    name: 'Atlas';
     version: string;
   };
 
