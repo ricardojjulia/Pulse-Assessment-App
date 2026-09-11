@@ -158,14 +158,15 @@ export const PreflightFlow: React.FC<PreflightFlowProps> = ({
         loading={preflight.running}
         variant="emphasized"
         color="primary"
+        style={{ width: "100%", textAlign: "center" }}
       >
         {preflight.running
           ? "Validating…"
           : selectedCount === 0
           ? "Select at least 1 capability"
           : selectedCount < totalCount
-          ? `Run Assessment (${selectedCount}/${totalCount})`
-          : "Run Assessment"}
+          ? `DT Capability Assessment (${selectedCount}/${totalCount})`
+          : "DT Capability Assessment"}
       </Button>
     </>
   );

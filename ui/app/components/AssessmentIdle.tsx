@@ -387,19 +387,21 @@ const IdleLeftPanel = React.memo(function IdleLeftPanel({
           </Flex>
         )}
 
-        <PreflightFlow
-          start={start}
-          onEnableProxyMode={onEnableProxyMode}
-          selectedCount={selectedCount}
-          totalCount={totalCount}
-          onBeforeStart={handleBeforeStart}
-        />
-        <Button onClick={() => navigate("/tenant-review")} variant="emphasized" color="primary" style={{ marginTop: 8 }}>
-          Tenant Review
-        </Button>
-        <Button onClick={() => navigate("/observability")} variant="emphasized" color="primary" style={{ marginTop: 8 }}>
-          Observability Eval
-        </Button>
+        <Flex flexDirection="column" gap={8} style={{ width: "100%", maxWidth: 280 }}>
+          <PreflightFlow
+            start={start}
+            onEnableProxyMode={onEnableProxyMode}
+            selectedCount={selectedCount}
+            totalCount={totalCount}
+            onBeforeStart={handleBeforeStart}
+          />
+          <Button onClick={() => navigate("/tenant-review")} variant="emphasized" color="primary" style={{ width: "100%", textAlign: "center" }}>
+            DT Inventory
+          </Button>
+          <Button onClick={() => navigate("/observability")} variant="emphasized" color="primary" style={{ width: "100%", textAlign: "center" }}>
+            DT Observability Evaluation
+          </Button>
+        </Flex>
         {hasResults && (
           <Flex flexDirection="column" alignItems="center" gap={6} style={{ marginTop: 12 }}>
             <Button onClick={resume} color="primary">

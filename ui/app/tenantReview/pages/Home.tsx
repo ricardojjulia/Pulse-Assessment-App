@@ -242,12 +242,15 @@ export const Home: React.FC = () => {
           </Flex>
         </Flex>
 
-        <Flex flexDirection="column" alignItems="center" gap={8}>
-          <Button onClick={() => navigate("/")} variant="emphasized" color="primary">
-            Run Assessment
+        <Flex flexDirection="column" gap={8} style={{ width: "100%", maxWidth: 280 }}>
+          <Button onClick={() => navigate("/")} variant="emphasized" color="primary" style={{ width: "100%", textAlign: "center" }}>
+            DT Capability Assessment
           </Button>
-          <Button onClick={() => navigate(tenantReviewPath("/app-rubrics"))} color="primary" variant="emphasized">
-            Tenant Review
+          <Button onClick={() => navigate(tenantReviewPath("/app-rubrics"))} color="primary" variant="emphasized" style={{ width: "100%", textAlign: "center" }}>
+            DT Inventory
+          </Button>
+          <Button onClick={() => navigate("/observability")} color="primary" variant="emphasized" style={{ width: "100%", textAlign: "center" }}>
+            DT Observability Evaluation
           </Button>
         </Flex>
 
